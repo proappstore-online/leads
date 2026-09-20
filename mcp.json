@@ -14,9 +14,19 @@
       "operation": "execute",
       "sql": "INSERT INTO lists (id, user_id, name, purpose, created_at) VALUES (:id, :__user_id, :name, :purpose, :__now)",
       "params": {
-        "id": { "type": "string", "description": "Client-generated UUID for the list" },
-        "name": { "type": "string", "description": "List name, e.g. 'Investors' or 'Podcast guests'" },
-        "purpose": { "type": "string", "optional": true, "description": "What this list is for" }
+        "id": {
+          "type": "string",
+          "description": "Client-generated UUID for the list"
+        },
+        "name": {
+          "type": "string",
+          "description": "List name, e.g. 'Investors' or 'Podcast guests'"
+        },
+        "purpose": {
+          "type": "string",
+          "optional": true,
+          "description": "What this list is for"
+        }
       },
       "requires_auth": true
     },
@@ -26,9 +36,19 @@
       "operation": "execute",
       "sql": "UPDATE lists SET name = :name, purpose = :purpose WHERE id = :id AND user_id = :__user_id",
       "params": {
-        "id": { "type": "string", "description": "List ID" },
-        "name": { "type": "string", "description": "List name" },
-        "purpose": { "type": "string", "optional": true, "description": "What this list is for" }
+        "id": {
+          "type": "string",
+          "description": "List ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "List name"
+        },
+        "purpose": {
+          "type": "string",
+          "optional": true,
+          "description": "What this list is for"
+        }
       },
       "requires_auth": true
     },
@@ -41,21 +61,47 @@
         "DELETE FROM lists WHERE id = :id AND user_id = :__user_id"
       ],
       "params": {
-        "id": { "type": "string", "description": "List ID" }
+        "id": {
+          "type": "string",
+          "description": "List ID"
+        }
       },
       "requires_auth": true
     },
     {
       "name": "list_leads",
-      "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term. list_ids is a comma-separated string of the lists each lead belongs to",
+      "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term. list_ids is a comma-separated string of the lists each lead belongs to. last_message_at is the time of the most recent recorded message (epoch ms), null if none",
       "operation": "query",
-      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY l.name COLLATE NOCASE LIMIT :limit OFFSET :offset",
+      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY l.name COLLATE NOCASE LIMIT :limit OFFSET :offset",
       "params": {
-        "list_id": { "type": "string", "optional": true, "description": "Only leads in this list" },
-        "status": { "type": "string", "optional": true, "description": "Only leads with this status" },
-        "q": { "type": "string", "optional": true, "description": "Search name, company, title, email, phone" },
-        "limit": { "type": "integer", "optional": true, "default": 100, "max": 500, "description": "Max results" },
-        "offset": { "type": "integer", "optional": true, "default": 0, "description": "Rows to skip" }
+        "list_id": {
+          "type": "string",
+          "optional": true,
+          "description": "Only leads in this list"
+        },
+        "status": {
+          "type": "string",
+          "optional": true,
+          "description": "Only leads with this status"
+        },
+        "q": {
+          "type": "string",
+          "optional": true,
+          "description": "Search name, company, title, email, phone"
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "default": 100,
+          "max": 500,
+          "description": "Max results"
+        },
+        "offset": {
+          "type": "integer",
+          "optional": true,
+          "default": 0,
+          "description": "Rows to skip"
+        }
       },
       "requires_auth": true
     },
@@ -73,23 +119,90 @@
       "operation": "execute",
       "sql": "INSERT INTO leads (id, user_id, name, title, company, email, phone, website, location, linkedin, twitter, instagram, facebook, tiktok, youtube, github, status, notes, created_at, updated_at) VALUES (:id, :__user_id, :name, :title, :company, :email, :phone, :website, :location, :linkedin, :twitter, :instagram, :facebook, :tiktok, :youtube, :github, :status, :notes, :__now, :__now)",
       "params": {
-        "id": { "type": "string", "description": "Client-generated UUID for the lead" },
-        "name": { "type": "string", "description": "Full name" },
-        "title": { "type": "string", "optional": true, "description": "Job title or role" },
-        "company": { "type": "string", "optional": true, "description": "Company or organisation" },
-        "email": { "type": "string", "optional": true, "description": "Email address" },
-        "phone": { "type": "string", "optional": true, "description": "Phone number" },
-        "website": { "type": "string", "optional": true, "description": "Website URL" },
-        "location": { "type": "string", "optional": true, "description": "City / country" },
-        "linkedin": { "type": "string", "optional": true, "description": "LinkedIn profile URL or handle" },
-        "twitter": { "type": "string", "optional": true, "description": "X / Twitter profile URL or handle" },
-        "instagram": { "type": "string", "optional": true, "description": "Instagram profile URL or handle" },
-        "facebook": { "type": "string", "optional": true, "description": "Facebook profile URL or handle" },
-        "tiktok": { "type": "string", "optional": true, "description": "TikTok profile URL or handle" },
-        "youtube": { "type": "string", "optional": true, "description": "YouTube channel URL or handle" },
-        "github": { "type": "string", "optional": true, "description": "GitHub profile URL or handle" },
-        "status": { "type": "string", "optional": true, "default": "new", "description": "new, contacted, replied, qualified, won, or lost" },
-        "notes": { "type": "string", "optional": true, "description": "Free-form notes" }
+        "id": {
+          "type": "string",
+          "description": "Client-generated UUID for the lead"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name"
+        },
+        "title": {
+          "type": "string",
+          "optional": true,
+          "description": "Job title or role"
+        },
+        "company": {
+          "type": "string",
+          "optional": true,
+          "description": "Company or organisation"
+        },
+        "email": {
+          "type": "string",
+          "optional": true,
+          "description": "Email address"
+        },
+        "phone": {
+          "type": "string",
+          "optional": true,
+          "description": "Phone number"
+        },
+        "website": {
+          "type": "string",
+          "optional": true,
+          "description": "Website URL"
+        },
+        "location": {
+          "type": "string",
+          "optional": true,
+          "description": "City / country"
+        },
+        "linkedin": {
+          "type": "string",
+          "optional": true,
+          "description": "LinkedIn profile URL or handle"
+        },
+        "twitter": {
+          "type": "string",
+          "optional": true,
+          "description": "X / Twitter profile URL or handle"
+        },
+        "instagram": {
+          "type": "string",
+          "optional": true,
+          "description": "Instagram profile URL or handle"
+        },
+        "facebook": {
+          "type": "string",
+          "optional": true,
+          "description": "Facebook profile URL or handle"
+        },
+        "tiktok": {
+          "type": "string",
+          "optional": true,
+          "description": "TikTok profile URL or handle"
+        },
+        "youtube": {
+          "type": "string",
+          "optional": true,
+          "description": "YouTube channel URL or handle"
+        },
+        "github": {
+          "type": "string",
+          "optional": true,
+          "description": "GitHub profile URL or handle"
+        },
+        "status": {
+          "type": "string",
+          "optional": true,
+          "default": "new",
+          "description": "new, contacted, replied, qualified, won, or lost"
+        },
+        "notes": {
+          "type": "string",
+          "optional": true,
+          "description": "Free-form notes"
+        }
       },
       "requires_auth": true
     },
@@ -99,36 +212,107 @@
       "operation": "execute",
       "sql": "UPDATE leads SET name = :name, title = :title, company = :company, email = :email, phone = :phone, website = :website, location = :location, linkedin = :linkedin, twitter = :twitter, instagram = :instagram, facebook = :facebook, tiktok = :tiktok, youtube = :youtube, github = :github, status = :status, notes = :notes, updated_at = :__now WHERE id = :id AND user_id = :__user_id",
       "params": {
-        "id": { "type": "string", "description": "Lead ID" },
-        "name": { "type": "string", "description": "Full name" },
-        "title": { "type": "string", "optional": true, "description": "Job title or role" },
-        "company": { "type": "string", "optional": true, "description": "Company or organisation" },
-        "email": { "type": "string", "optional": true, "description": "Email address" },
-        "phone": { "type": "string", "optional": true, "description": "Phone number" },
-        "website": { "type": "string", "optional": true, "description": "Website URL" },
-        "location": { "type": "string", "optional": true, "description": "City / country" },
-        "linkedin": { "type": "string", "optional": true, "description": "LinkedIn profile URL or handle" },
-        "twitter": { "type": "string", "optional": true, "description": "X / Twitter profile URL or handle" },
-        "instagram": { "type": "string", "optional": true, "description": "Instagram profile URL or handle" },
-        "facebook": { "type": "string", "optional": true, "description": "Facebook profile URL or handle" },
-        "tiktok": { "type": "string", "optional": true, "description": "TikTok profile URL or handle" },
-        "youtube": { "type": "string", "optional": true, "description": "YouTube channel URL or handle" },
-        "github": { "type": "string", "optional": true, "description": "GitHub profile URL or handle" },
-        "status": { "type": "string", "optional": true, "default": "new", "description": "new, contacted, replied, qualified, won, or lost" },
-        "notes": { "type": "string", "optional": true, "description": "Free-form notes" }
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name"
+        },
+        "title": {
+          "type": "string",
+          "optional": true,
+          "description": "Job title or role"
+        },
+        "company": {
+          "type": "string",
+          "optional": true,
+          "description": "Company or organisation"
+        },
+        "email": {
+          "type": "string",
+          "optional": true,
+          "description": "Email address"
+        },
+        "phone": {
+          "type": "string",
+          "optional": true,
+          "description": "Phone number"
+        },
+        "website": {
+          "type": "string",
+          "optional": true,
+          "description": "Website URL"
+        },
+        "location": {
+          "type": "string",
+          "optional": true,
+          "description": "City / country"
+        },
+        "linkedin": {
+          "type": "string",
+          "optional": true,
+          "description": "LinkedIn profile URL or handle"
+        },
+        "twitter": {
+          "type": "string",
+          "optional": true,
+          "description": "X / Twitter profile URL or handle"
+        },
+        "instagram": {
+          "type": "string",
+          "optional": true,
+          "description": "Instagram profile URL or handle"
+        },
+        "facebook": {
+          "type": "string",
+          "optional": true,
+          "description": "Facebook profile URL or handle"
+        },
+        "tiktok": {
+          "type": "string",
+          "optional": true,
+          "description": "TikTok profile URL or handle"
+        },
+        "youtube": {
+          "type": "string",
+          "optional": true,
+          "description": "YouTube channel URL or handle"
+        },
+        "github": {
+          "type": "string",
+          "optional": true,
+          "description": "GitHub profile URL or handle"
+        },
+        "status": {
+          "type": "string",
+          "optional": true,
+          "default": "new",
+          "description": "new, contacted, replied, qualified, won, or lost"
+        },
+        "notes": {
+          "type": "string",
+          "optional": true,
+          "description": "Free-form notes"
+        }
       },
       "requires_auth": true
     },
     {
       "name": "delete_lead",
-      "description": "Delete a lead and remove it from every list",
+      "description": "Delete a lead, its recorded conversation, and its list memberships",
       "operation": "batch",
       "statements": [
+        "DELETE FROM messages WHERE lead_id = :id AND user_id = :__user_id",
         "DELETE FROM lead_lists WHERE lead_id = :id AND user_id = :__user_id",
         "DELETE FROM leads WHERE id = :id AND user_id = :__user_id"
       ],
       "params": {
-        "id": { "type": "string", "description": "Lead ID" }
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
+        }
       },
       "requires_auth": true
     },
@@ -138,8 +322,14 @@
       "operation": "execute",
       "sql": "INSERT OR IGNORE INTO lead_lists (lead_id, list_id, user_id, created_at) SELECT l.id, li.id, :__user_id, :__now FROM leads l, lists li WHERE l.id = :lead_id AND li.id = :list_id AND l.user_id = :__user_id AND li.user_id = :__user_id",
       "params": {
-        "lead_id": { "type": "string", "description": "Lead ID" },
-        "list_id": { "type": "string", "description": "List ID" }
+        "lead_id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "list_id": {
+          "type": "string",
+          "description": "List ID"
+        }
       },
       "requires_auth": true
     },
@@ -149,8 +339,120 @@
       "operation": "execute",
       "sql": "DELETE FROM lead_lists WHERE lead_id = :lead_id AND list_id = :list_id AND user_id = :__user_id",
       "params": {
-        "lead_id": { "type": "string", "description": "Lead ID" },
-        "list_id": { "type": "string", "description": "List ID" }
+        "lead_id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "list_id": {
+          "type": "string",
+          "description": "List ID"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_messages",
+      "description": "Read the recorded conversation with a lead, oldest first. Every message has its exact time (occurred_at, epoch ms), platform, direction ('in' from the lead, 'out' to the lead) and full body. Page with offset to read everything",
+      "operation": "query",
+      "sql": "SELECT id, lead_id, platform, direction, body, occurred_at, created_at FROM messages WHERE lead_id = :lead_id AND user_id = :__user_id AND (:platform IS NULL OR platform = :platform) ORDER BY occurred_at, created_at LIMIT :limit OFFSET :offset",
+      "params": {
+        "lead_id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "platform": {
+          "type": "string",
+          "optional": true,
+          "description": "Only messages from this platform"
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "default": 500,
+          "max": 1000,
+          "description": "Max results"
+        },
+        "offset": {
+          "type": "integer",
+          "optional": true,
+          "default": 0,
+          "description": "Rows to skip"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "add_message",
+      "description": "Record one message of a conversation with a lead, with the exact time it happened and the platform it happened on",
+      "operation": "execute",
+      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, created_at) SELECT :id, :__user_id, l.id, :platform, :direction, :body, :occurred_at, :__now FROM leads l WHERE l.id = :lead_id AND l.user_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Client-generated UUID for the message"
+        },
+        "lead_id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Where it happened, e.g. LinkedIn, Email, X, Instagram, Facebook, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other"
+        },
+        "direction": {
+          "type": "string",
+          "description": "'out' if the signed-in user sent it, 'in' if the lead sent it"
+        },
+        "body": {
+          "type": "string",
+          "description": "Full text of the message"
+        },
+        "occurred_at": {
+          "type": "integer",
+          "description": "Exact time the message was sent, as Unix epoch milliseconds (UTC)"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_message",
+      "description": "Correct a recorded message",
+      "operation": "execute",
+      "sql": "UPDATE messages SET platform = :platform, direction = :direction, body = :body, occurred_at = :occurred_at WHERE id = :id AND user_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Message ID"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Where it happened, e.g. LinkedIn, Email, X, Instagram, Facebook, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other"
+        },
+        "direction": {
+          "type": "string",
+          "description": "'out' if the signed-in user sent it, 'in' if the lead sent it"
+        },
+        "body": {
+          "type": "string",
+          "description": "Full text of the message"
+        },
+        "occurred_at": {
+          "type": "integer",
+          "description": "Exact time the message was sent, as Unix epoch milliseconds (UTC)"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_message",
+      "description": "Delete a recorded message",
+      "operation": "execute",
+      "sql": "DELETE FROM messages WHERE id = :id AND user_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Message ID"
+        }
       },
       "requires_auth": true
     }

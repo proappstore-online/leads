@@ -15,6 +15,7 @@ export function LeadTable({ leads, lists, onOpen }: { leads: Lead[]; lists: Lead
             <th className="px-4 py-3 font-semibold">Contact</th>
             <th className="hidden px-4 py-3 font-semibold md:table-cell">Profiles</th>
             <th className="hidden px-4 py-3 font-semibold lg:table-cell">Lists</th>
+            <th className="hidden px-4 py-3 font-semibold sm:table-cell">Last contact</th>
             <th className="px-4 py-3 font-semibold">Status</th>
           </tr>
         </thead>
@@ -44,6 +45,9 @@ export function LeadTable({ leads, lists, onOpen }: { leads: Lead[]; lists: Lead
                     <span key={id} className="rounded-full bg-[var(--line)] px-2 py-0.5 text-xs text-[var(--muted)]">{listNames.get(id)}</span>
                   ))}
                 </div>
+              </td>
+              <td className="hidden px-4 py-3 text-xs text-[var(--muted)] sm:table-cell">
+                {lead.last_message_at ? new Date(lead.last_message_at).toLocaleDateString() : '—'}
               </td>
               <td className="px-4 py-3 text-xs font-semibold capitalize text-[var(--muted)]">{lead.status}</td>
             </tr>

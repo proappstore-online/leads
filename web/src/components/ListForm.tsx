@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { x } from '../lib/actions'
 import type { LeadList } from '../types'
 import { Modal } from './Modal'
+import { inputClass } from './styles'
 
-const inputClass = 'mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]'
 
 export function ListForm({ list, onClose, onSaved, onDeleted }: {
   list: LeadList | null

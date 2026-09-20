@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { x } from '../lib/actions'
 import { SOCIALS } from '../lib/socials'
 import { STATUSES, type Lead, type LeadFields, type LeadList } from '../types'
+import { Conversation } from './Conversation'
 import { Modal } from './Modal'
+import { inputClass } from './styles'
 
-const inputClass = 'mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]'
 
 const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholder?: string }[] = [
   { key: 'title', label: 'Title / role', placeholder: 'Head of Partnerships' },
@@ -40,6 +41,10 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
   const [selected, setSelected] = useState<Set<string>>(new Set(memberOf))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [tab, setTab] = useState<'details' | 'conversation'>('details')
+  // Messages save immediately, so closing after a change must still refresh the table.
+  const [messagesChanged, setMessagesChanged] = useState(false)
+  const close = messagesChanged ? onSaved : onClose
 
   const set = (key: keyof LeadFields, value: string) => setFields((f) => ({ ...f, [key]: value }))
 
@@ -83,8 +88,25 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
   }
 
   return (
-    <Modal title={lead ? 'Edit lead' : 'Add lead'} onClose={onClose}>
-      <form onSubmit={save} className="mt-4 space-y-5">
+    <Modal title={lead ? lead.name : 'Add lead'} onClose={close}>
+      {lead && (
+        <div role="tablist" className="mt-3 flex gap-1 border-b border-[var(--line)]">
+          {(['details', 'conversation'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-semibold capitalize ${tab === t ? 'border-[var(--accent)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)]'}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+      {lead && tab === 'conversation' && <Conversation lead={lead} onChanged={() => setMessagesChanged(true)} />}
+      <form onSubmit={save} hidden={tab !== 'details'} className="mt-4 space-y-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block sm:col-span-2">
             <span className="text-sm font-medium text-[var(--ink)]">Name</span>
