@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ProShell } from '@proappstore/sdk'
+import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { q } from './lib/actions'
 import { STATUSES, type Lead, type LeadList } from './types'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
+import { SignIn } from './components/SignIn'
 
 const PAGE = 200
 
 export default function App() {
+  const { user, loading } = useProAuth(app)
+  // ProShell's own signed-out gate is GitHub-only; ours offers Google too.
+  if (!loading && !user) return <SignIn />
+
   return (
     <ProShell app={app} appName="Leads">
       <Home />
