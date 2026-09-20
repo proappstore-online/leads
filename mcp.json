@@ -1,0 +1,158 @@
+{
+  "tools": [
+    {
+      "name": "list_lists",
+      "description": "List the signed-in user's lead lists with the number of leads in each",
+      "operation": "query",
+      "sql": "SELECT li.id, li.name, li.purpose, li.created_at, (SELECT COUNT(*) FROM lead_lists ll WHERE ll.list_id = li.id) AS lead_count FROM lists li WHERE li.user_id = :__user_id ORDER BY li.name COLLATE NOCASE LIMIT 500",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "create_list",
+      "description": "Create a lead list (a category of leads for one purpose or role)",
+      "operation": "execute",
+      "sql": "INSERT INTO lists (id, user_id, name, purpose, created_at) VALUES (:id, :__user_id, :name, :purpose, :__now)",
+      "params": {
+        "id": { "type": "string", "description": "Client-generated UUID for the list" },
+        "name": { "type": "string", "description": "List name, e.g. 'Investors' or 'Podcast guests'" },
+        "purpose": { "type": "string", "optional": true, "description": "What this list is for" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_list",
+      "description": "Rename a lead list or change its purpose",
+      "operation": "execute",
+      "sql": "UPDATE lists SET name = :name, purpose = :purpose WHERE id = :id AND user_id = :__user_id",
+      "params": {
+        "id": { "type": "string", "description": "List ID" },
+        "name": { "type": "string", "description": "List name" },
+        "purpose": { "type": "string", "optional": true, "description": "What this list is for" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_list",
+      "description": "Delete a lead list. The leads themselves stay in the database",
+      "operation": "batch",
+      "statements": [
+        "DELETE FROM lead_lists WHERE list_id = :id AND user_id = :__user_id",
+        "DELETE FROM lists WHERE id = :id AND user_id = :__user_id"
+      ],
+      "params": {
+        "id": { "type": "string", "description": "List ID" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_leads",
+      "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term. list_ids is a comma-separated string of the lists each lead belongs to",
+      "operation": "query",
+      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY l.name COLLATE NOCASE LIMIT :limit OFFSET :offset",
+      "params": {
+        "list_id": { "type": "string", "optional": true, "description": "Only leads in this list" },
+        "status": { "type": "string", "optional": true, "description": "Only leads with this status" },
+        "q": { "type": "string", "optional": true, "description": "Search name, company, title, email, phone" },
+        "limit": { "type": "integer", "optional": true, "default": 100, "max": 500, "description": "Max results" },
+        "offset": { "type": "integer", "optional": true, "default": 0, "description": "Rows to skip" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "count_leads",
+      "description": "Total number of leads in the signed-in user's database",
+      "operation": "query",
+      "sql": "SELECT COUNT(*) AS total FROM leads WHERE user_id = :__user_id",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "create_lead",
+      "description": "Add a lead (contact) to the database",
+      "operation": "execute",
+      "sql": "INSERT INTO leads (id, user_id, name, title, company, email, phone, website, location, linkedin, twitter, instagram, facebook, tiktok, youtube, github, status, notes, created_at, updated_at) VALUES (:id, :__user_id, :name, :title, :company, :email, :phone, :website, :location, :linkedin, :twitter, :instagram, :facebook, :tiktok, :youtube, :github, :status, :notes, :__now, :__now)",
+      "params": {
+        "id": { "type": "string", "description": "Client-generated UUID for the lead" },
+        "name": { "type": "string", "description": "Full name" },
+        "title": { "type": "string", "optional": true, "description": "Job title or role" },
+        "company": { "type": "string", "optional": true, "description": "Company or organisation" },
+        "email": { "type": "string", "optional": true, "description": "Email address" },
+        "phone": { "type": "string", "optional": true, "description": "Phone number" },
+        "website": { "type": "string", "optional": true, "description": "Website URL" },
+        "location": { "type": "string", "optional": true, "description": "City / country" },
+        "linkedin": { "type": "string", "optional": true, "description": "LinkedIn profile URL or handle" },
+        "twitter": { "type": "string", "optional": true, "description": "X / Twitter profile URL or handle" },
+        "instagram": { "type": "string", "optional": true, "description": "Instagram profile URL or handle" },
+        "facebook": { "type": "string", "optional": true, "description": "Facebook profile URL or handle" },
+        "tiktok": { "type": "string", "optional": true, "description": "TikTok profile URL or handle" },
+        "youtube": { "type": "string", "optional": true, "description": "YouTube channel URL or handle" },
+        "github": { "type": "string", "optional": true, "description": "GitHub profile URL or handle" },
+        "status": { "type": "string", "optional": true, "default": "new", "description": "new, contacted, replied, qualified, won, or lost" },
+        "notes": { "type": "string", "optional": true, "description": "Free-form notes" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_lead",
+      "description": "Update every field of a lead",
+      "operation": "execute",
+      "sql": "UPDATE leads SET name = :name, title = :title, company = :company, email = :email, phone = :phone, website = :website, location = :location, linkedin = :linkedin, twitter = :twitter, instagram = :instagram, facebook = :facebook, tiktok = :tiktok, youtube = :youtube, github = :github, status = :status, notes = :notes, updated_at = :__now WHERE id = :id AND user_id = :__user_id",
+      "params": {
+        "id": { "type": "string", "description": "Lead ID" },
+        "name": { "type": "string", "description": "Full name" },
+        "title": { "type": "string", "optional": true, "description": "Job title or role" },
+        "company": { "type": "string", "optional": true, "description": "Company or organisation" },
+        "email": { "type": "string", "optional": true, "description": "Email address" },
+        "phone": { "type": "string", "optional": true, "description": "Phone number" },
+        "website": { "type": "string", "optional": true, "description": "Website URL" },
+        "location": { "type": "string", "optional": true, "description": "City / country" },
+        "linkedin": { "type": "string", "optional": true, "description": "LinkedIn profile URL or handle" },
+        "twitter": { "type": "string", "optional": true, "description": "X / Twitter profile URL or handle" },
+        "instagram": { "type": "string", "optional": true, "description": "Instagram profile URL or handle" },
+        "facebook": { "type": "string", "optional": true, "description": "Facebook profile URL or handle" },
+        "tiktok": { "type": "string", "optional": true, "description": "TikTok profile URL or handle" },
+        "youtube": { "type": "string", "optional": true, "description": "YouTube channel URL or handle" },
+        "github": { "type": "string", "optional": true, "description": "GitHub profile URL or handle" },
+        "status": { "type": "string", "optional": true, "default": "new", "description": "new, contacted, replied, qualified, won, or lost" },
+        "notes": { "type": "string", "optional": true, "description": "Free-form notes" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_lead",
+      "description": "Delete a lead and remove it from every list",
+      "operation": "batch",
+      "statements": [
+        "DELETE FROM lead_lists WHERE lead_id = :id AND user_id = :__user_id",
+        "DELETE FROM leads WHERE id = :id AND user_id = :__user_id"
+      ],
+      "params": {
+        "id": { "type": "string", "description": "Lead ID" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "add_lead_to_list",
+      "description": "Put a lead in a list. A lead can be in many lists",
+      "operation": "execute",
+      "sql": "INSERT OR IGNORE INTO lead_lists (lead_id, list_id, user_id, created_at) SELECT l.id, li.id, :__user_id, :__now FROM leads l, lists li WHERE l.id = :lead_id AND li.id = :list_id AND l.user_id = :__user_id AND li.user_id = :__user_id",
+      "params": {
+        "lead_id": { "type": "string", "description": "Lead ID" },
+        "list_id": { "type": "string", "description": "List ID" }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "remove_lead_from_list",
+      "description": "Take a lead out of a list. The lead stays in the database",
+      "operation": "execute",
+      "sql": "DELETE FROM lead_lists WHERE lead_id = :lead_id AND list_id = :list_id AND user_id = :__user_id",
+      "params": {
+        "lead_id": { "type": "string", "description": "Lead ID" },
+        "list_id": { "type": "string", "description": "List ID" }
+      },
+      "requires_auth": true
+    }
+  ]
+}
