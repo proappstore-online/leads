@@ -15,14 +15,14 @@ export const SOCIALS: { key: keyof LeadFields; label: string; domains: string[];
   { key: 'github', label: 'GitHub', domains: ['github.com'], example: 'https://github.com/janedoe' },
 ]
 
-/** Mirrors the SQL guard: https://, no spaces, the platform's domain, and a path after it. */
+/** Mirrors the SQL guard: https://, no spaces, the host is the platform's domain (or a subdomain of it), and a path after it. */
 export function isProfileLink(domains: string[], value: string): boolean {
   if (/\s/.test(value) || !value.toLowerCase().startsWith('https://')) return false
-  const lower = value.toLowerCase()
-  return domains.some((d) => {
-    const at = lower.indexOf(`${d}/`)
-    return at >= 0 && lower.length > at + d.length + 1
-  })
+  const rest = value.slice('https://'.length)
+  const slash = rest.indexOf('/')
+  if (slash < 0 || slash === rest.length - 1) return false
+  const host = rest.slice(0, slash).toLowerCase()
+  return domains.some((d) => host === d || host.endsWith(`.${d}`))
 }
 
 /** Websites may be typed without a scheme. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { q } from '../lib/actions'
 import { FITS, STATUSES, type LeadList, type Source } from '../types'
 import { BarChart } from './BarChart'
@@ -21,6 +21,8 @@ interface Activity {
   lead_name: string | null
   source_name: string | null
   detail: string | null
+  /** Tie-breaker for paging events that share a timestamp. */
+  k: string
 }
 
 const RANGES = {
@@ -72,16 +74,18 @@ function describe(e: Activity): string {
 }
 
 /** Charts and activity: what came in, what agents did, and where the pipeline stands. */
-export function StatsPage({ lists, sources, onOpenLead }: {
+export function StatsPage({ lists, sources, version, onOpenLead }: {
   lists: LeadList[]
   sources: Source[]
+  /** Bumped by the parent after any save, so the page reloads. */
+  version: number
   onOpenLead: (id: string) => void
 }) {
   const [range, setRange] = useState<RangeKey>('30d')
   const [sourceId, setSourceId] = useState('')
   const [listId, setListId] = useState('')
-  const [series, setSeries] = useState<Bucket[]>([])
-  const [totals, setTotals] = useState<Bucket | null>(null)
+  // Rows are kept with the buckets they were fetched for, so a new range never shows old numbers under new labels.
+  const [data, setData] = useState<{ pairs: [number, number][]; series: Bucket[]; totals: Bucket | null } | null>(null)
   const [pipeline, setPipeline] = useState<Pipeline | null>(null)
   const [feed, setFeed] = useState<Activity[]>([])
   const [feedMore, setFeedMore] = useState(false)
@@ -100,27 +104,31 @@ export function StatsPage({ lists, sources, onOpenLead }: {
       q<Pipeline>('stats_pipeline', filters),
     ]).then(([rows, total, pipe]) => {
       if (!live) return
-      setSeries(rows)
-      setTotals(total[0] ?? null)
+      setData({ pairs, series: rows, totals: total[0] ?? null })
       setPipeline(pipe[0] ?? null)
       setError('')
     }).catch((e) => live && setError(e instanceof Error ? e.message : String(e)))
     return () => { live = false }
-  }, [pairs, filters])
+  }, [pairs, filters, version])
 
-  const loadFeed = useCallback(async (before: number | null) => {
+  const feedRequest = useRef(0)
+  const loadFeed = useCallback(async (last: Activity | null) => {
+    const id = ++feedRequest.current
     try {
-      const rows = await q<Activity>('recent_activity', { limit: FEED_PAGE, before, source_id: sourceId || null })
-      setFeed((prev) => (before ? [...prev, ...rows] : rows))
+      const rows = await q<Activity>('recent_activity', { limit: FEED_PAGE, before: last?.at ?? null, before_k: last?.k ?? null, source_id: sourceId || null })
+      if (id !== feedRequest.current) return // a newer request (other filter) superseded this one
+      setFeed((prev) => (last ? [...prev, ...rows] : rows))
       setFeedMore(rows.length === FEED_PAGE)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (id === feedRequest.current) setError(e instanceof Error ? e.message : String(e))
     }
   }, [sourceId])
 
-  useEffect(() => { loadFeed(null) }, [loadFeed])
+  useEffect(() => { loadFeed(null) }, [loadFeed, version])
 
-  const col = (key: keyof Bucket) => series.map((b) => b[key])
+  const current = data?.pairs === pairs ? data : null
+  const totals = current?.totals ?? null
+  const col = (key: keyof Bucket) => current?.series.map((b) => b[key]) ?? []
   const selectClass = 'rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-sm text-[var(--ink)] outline-none'
   const tiles: [string, number | undefined][] = [
     ['Leads added', totals?.leads_added],
@@ -211,8 +219,8 @@ export function StatsPage({ lists, sources, onOpenLead }: {
           <p className="mt-3 text-sm text-[var(--muted)]">Nothing yet.</p>
         ) : (
           <ol className="mt-2 divide-y divide-[var(--line)]">
-            {feed.map((e, i) => (
-              <li key={`${e.kind}-${e.lead_id ?? e.source_name}-${e.at}-${i}`} className="flex gap-3 py-2 text-sm">
+            {feed.map((e) => (
+              <li key={e.k + e.at} className="flex gap-3 py-2 text-sm">
                 <time dateTime={new Date(e.at).toISOString()} className="w-28 shrink-0 text-xs tabular-nums text-[var(--muted)]">
                   {new Date(e.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </time>
@@ -230,7 +238,7 @@ export function StatsPage({ lists, sources, onOpenLead }: {
           </ol>
         )}
         {feedMore && (
-          <button type="button" onClick={() => loadFeed(feed[feed.length - 1].at)} className="mt-2 w-full rounded-xl border border-[var(--line-strong)] py-2 text-sm font-semibold text-[var(--ink)]">Load older activity</button>
+          <button type="button" onClick={() => loadFeed(feed[feed.length - 1])} className="mt-2 w-full rounded-xl border border-[var(--line-strong)] py-2 text-sm font-semibold text-[var(--ink)]">Load older activity</button>
         )}
       </section>
     </main>

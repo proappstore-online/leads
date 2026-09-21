@@ -67,11 +67,14 @@ function Home() {
     }
   }, [])
 
+  const sourcesRequest = useRef(0)
   const loadSources = useCallback(async () => {
+    const id = ++sourcesRequest.current
     try {
-      setSources(await q<Source>('list_sources', { sort: sourceSort }))
+      const rows = await q<Source>('list_sources', { sort: sourceSort })
+      if (id === sourcesRequest.current) setSources(rows) // ignore a slower, older response
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (id === sourcesRequest.current) setError(e instanceof Error ? e.message : String(e))
     }
   }, [sourceSort])
 
@@ -165,7 +168,7 @@ function Home() {
       </nav>
 
       {view === 'stats' ? (
-        <StatsPage lists={lists} sources={sources} onOpenLead={openLeadById} />
+        <StatsPage lists={lists} sources={sources} version={version} onOpenLead={openLeadById} />
       ) : view === 'sources' ? (
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -294,7 +297,11 @@ function Home() {
           source={editingSource === 'new' ? null : editingSource}
           onClose={() => setEditingSource(null)}
           onSaved={() => { setEditingSource(null); refresh() }}
-          onDeleted={() => setViewingSourceId(null)}
+          onDeleted={() => {
+            const deleted = editingSource === 'new' ? null : editingSource?.id
+            setViewingSourceId(null)
+            setSourceId((s) => (s === deleted ? '' : s)) // don't leave the leads view filtered on a source that no longer exists
+          }}
         />
       )}
       {editingList && (

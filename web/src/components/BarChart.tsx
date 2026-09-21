@@ -29,7 +29,7 @@ export function BarChart({ title, labels, series, height = 170 }: {
   const plotH = height - PAD.top - PAD.bottom
   const max = Math.max(1, ...series.flatMap((s) => s.values))
   // Whole-number ticks: 0, half, top.
-  const top = max <= 4 ? max : Math.ceil(max / 2) * 2
+  const top = max <= 2 ? max : Math.ceil(max / 2) * 2
   const ticks = top <= 1 ? [0, top] : [0, top / 2, top]
   const groupW = plotW / Math.max(1, n)
   const gap = 2

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { x } from '../lib/actions'
+import { q, x } from '../lib/actions'
 import { SOCIALS, isProfileLink } from '../lib/socials'
 import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Source } from '../types'
 import { Conversation } from './Conversation'
@@ -43,10 +43,13 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'details' | 'conversation'>('details')
-  // Messages save immediately, so closing after a change must still refresh the table.
-  const [messagesChanged, setMessagesChanged] = useState(false)
-  const close = messagesChanged ? onSaved : onClose
+  // Messages and flags save immediately, so closing after one must still refresh the table.
+  const [savedInPlace, setSavedInPlace] = useState(false)
+  const close = savedInPlace ? onSaved : onClose
   const [attentionReason, setAttentionReason] = useState('')
+  const [attention, setAttention] = useState({ on: Boolean(lead?.needs_attention), reason: lead?.attention_reason ?? null, at: lead?.attention_at ?? null })
+  /** updated_at as last read - saving is refused if the lead changed since (e.g. an agent edited it). */
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState(lead?.updated_at ?? null)
 
   const set = (key: keyof LeadFields, value: string) => setFields((f) => ({ ...f, [key]: value }))
 
@@ -69,6 +72,28 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
     }
   }
 
+  /** Flag / clear without closing the form, so unsaved edits stay. */
+  async function setFlag(action: 'flag_needs_attention' | 'clear_needs_attention') {
+    if (!lead) return
+    setSaving(true)
+    try {
+      const { changes } = await x(action, action === 'flag_needs_attention' ? { id: lead.id, reason: attentionReason.trim() } : { id: lead.id })
+      if (changes === 0) throw new Error('Not saved - this lead may have been deleted.')
+      const [fresh] = await q<Lead>('get_lead', { id: lead.id })
+      if (fresh) {
+        setAttention({ on: Boolean(fresh.needs_attention), reason: fresh.attention_reason, at: fresh.attention_at })
+        setBaseUpdatedAt(fresh.updated_at)
+      }
+      setAttentionReason('')
+      setSavedInPlace(true)
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   function save(e: React.FormEvent) {
     e.preventDefault()
     const notLinks = SOCIALS.filter(({ key, domains }) => fields[key].trim() && !isProfileLink(domains, fields[key].trim()))
@@ -83,11 +108,14 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
     const id = lead?.id ?? crypto.randomUUID()
     const params: Record<string, unknown> = { id }
     for (const [key, value] of Object.entries(fields)) params[key] = value.trim() || null
+    if (lead) params.if_unchanged_since = baseUpdatedAt
     const before = new Set(lead ? memberOf : [])
     run(async () => {
       const { changes } = await x(lead ? 'update_lead' : 'create_lead', params)
       // The actions refuse the whole write on a non-link social field or a duplicate email / profile link.
-      if (changes === 0) throw new Error('Not saved. Either a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.')
+      if (changes === 0) throw new Error(lead
+        ? 'Not saved. Either this lead was changed by someone else (for example an agent) since you opened it - close and reopen it to see the latest - or a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.'
+        : 'Not saved. Either a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.')
       await Promise.all([
         ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id })),
         ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id })),
@@ -118,23 +146,23 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
           ))}
         </div>
       )}
-      {lead && (lead.needs_attention ? (
+      {lead && (attention.on ? (
         <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--warning)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] px-4 py-3">
           <div className="min-w-0 select-text">
             <div className="text-xs font-bold uppercase tracking-wider text-[var(--warning)]">
-              Needs attention{lead.attention_at ? ` · ${new Date(lead.attention_at).toLocaleString()}` : ''}
+              Needs attention{attention.at ? ` · ${new Date(attention.at).toLocaleString()}` : ''}
             </div>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink)]">{lead.attention_reason}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink)]">{attention.reason}</p>
           </div>
-          <button type="button" disabled={saving} onClick={() => run(() => x('clear_needs_attention', { id: lead.id }).then(() => undefined))} className="shrink-0 rounded-xl bg-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Mark handled</button>
+          <button type="button" disabled={saving} onClick={() => setFlag('clear_needs_attention')} className="shrink-0 rounded-xl bg-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Mark handled</button>
         </div>
       ) : (
         <div className="mt-4 flex gap-2">
           <input type="text" aria-label="Why this lead needs attention" value={attentionReason} onChange={(e) => setAttentionReason(e.target.value)} placeholder="Flag as needs attention — say why" className={`${inputClass} mt-0`} />
-          <button type="button" disabled={saving || !attentionReason.trim()} onClick={() => run(() => x('flag_needs_attention', { id: lead.id, reason: attentionReason.trim() }).then(() => undefined))} className="shrink-0 rounded-xl border border-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--warning)] disabled:opacity-40">Flag</button>
+          <button type="button" disabled={saving || !attentionReason.trim()} onClick={() => setFlag('flag_needs_attention')} className="shrink-0 rounded-xl border border-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--warning)] disabled:opacity-40">Flag</button>
         </div>
       ))}
-      {lead && tab === 'conversation' && <Conversation lead={lead} onChanged={() => setMessagesChanged(true)} />}
+      {lead && tab === 'conversation' && <Conversation lead={lead} onChanged={() => setSavedInPlace(true)} />}
       <form onSubmit={save} hidden={tab !== 'details'} className="mt-4 space-y-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block sm:col-span-2">

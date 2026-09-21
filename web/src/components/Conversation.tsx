@@ -64,8 +64,10 @@ export function Conversation({ lead, onChanged }: { lead: Lead; onChanged: () =>
     e.preventDefault()
     const fields = { platform, direction, body: body.trim(), occurred_at: new Date(occurredAt).getTime() }
     run(async () => {
-      if (editing) await x('update_message', { id: editing.id, ...fields })
-      else await x('add_message', { id: crypto.randomUUID(), lead_id: lead.id, ...fields })
+      const { changes } = editing
+        ? await x('update_message', { id: editing.id, ...fields })
+        : await x('add_message', { id: crypto.randomUUID(), lead_id: lead.id, ...fields })
+      if (changes === 0) throw new Error('Not saved. The message needs some text and a platform from the list.')
       // Platform, direction and time stay put — handy when logging a thread message by message.
       setEditing(null)
       setBody('')
