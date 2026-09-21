@@ -1,4 +1,4 @@
-import { SOCIALS, profileUrl } from '../lib/socials'
+import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList, Sort, SortKey } from '../types'
 
 const linkClass = 'text-[var(--sky-deep)] underline-offset-4 hover:underline'
@@ -49,10 +49,14 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
               </td>
               <td className="hidden px-4 py-3 text-xs md:table-cell" onClick={(e) => e.stopPropagation()}>
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  {lead.website && <a href={profileUrl('https://', lead.website)} target="_blank" rel="noreferrer" className={linkClass}>Web</a>}
-                  {SOCIALS.map(({ key, label, base }) => {
+                  {lead.website && <a href={websiteUrl(lead.website)} target="_blank" rel="noreferrer" className={linkClass}>Web</a>}
+                  {SOCIALS.map(({ key, label, domains }) => {
                     const value = lead[key]
-                    return value && <a key={key} href={profileUrl(base, value)} target="_blank" rel="noreferrer" className={linkClass}>{label}</a>
+                    if (!value) return null
+                    // Values saved before links were enforced (a name, a handle) are flagged, not linked.
+                    return isProfileLink(domains, value)
+                      ? <a key={key} href={value} target="_blank" rel="noreferrer" className={linkClass}>{label}</a>
+                      : <span key={key} title={`Not a link: "${value}". Open the lead and paste the profile URL.`} className="text-[var(--warning)]">{label}: no link</span>
                   })}
                 </div>
               </td>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { x } from '../lib/actions'
-import { SOCIALS } from '../lib/socials'
+import { SOCIALS, isProfileLink } from '../lib/socials'
 import { STATUSES, type Lead, type LeadFields, type LeadList } from '../types'
 import { Conversation } from './Conversation'
 import { Modal } from './Modal'
@@ -70,12 +70,19 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
 
   function save(e: React.FormEvent) {
     e.preventDefault()
+    const notLinks = SOCIALS.filter(({ key, domains }) => fields[key].trim() && !isProfileLink(domains, fields[key].trim()))
+    if (notLinks.length > 0) {
+      setError(notLinks.map(({ label, example }) => `${label} must be the full profile link, like ${example} — not a name or handle. Clear it if you don't have the link.`).join(' '))
+      return
+    }
     const id = lead?.id ?? crypto.randomUUID()
     const params: Record<string, unknown> = { id }
     for (const [key, value] of Object.entries(fields)) params[key] = value.trim() || null
     const before = new Set(lead ? memberOf : [])
     run(async () => {
-      await x(lead ? 'update_lead' : 'create_lead', params)
+      const { changes } = await x(lead ? 'update_lead' : 'create_lead', params)
+      // The actions refuse the whole write when a social field is not a profile link.
+      if (changes === 0) throw new Error('Not saved: every social profile must be a full https:// profile link.')
       await Promise.all([
         ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id })),
         ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id })),
@@ -122,12 +129,20 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
         </div>
 
         <fieldset>
-          <legend className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Social profiles</legend>
+          <legend className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Social profiles — links only</legend>
           <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {SOCIALS.map(({ key, label }) => (
+            {SOCIALS.map(({ key, label, domains, example }) => (
               <label key={key} className="block">
                 <span className="text-sm font-medium text-[var(--ink)]">{label}</span>
-                <input type="text" value={fields[key]} onChange={(e) => set(key, e.target.value)} placeholder="URL or @handle" className={inputClass} />
+                <input
+                  type="text"
+                  inputMode="url"
+                  value={fields[key]}
+                  onChange={(e) => set(key, e.target.value)}
+                  placeholder={example}
+                  aria-invalid={Boolean(fields[key].trim()) && !isProfileLink(domains, fields[key].trim())}
+                  className={`${inputClass} aria-[invalid=true]:border-[var(--error)]`}
+                />
               </label>
             ))}
           </div>

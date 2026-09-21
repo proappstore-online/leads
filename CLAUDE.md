@@ -13,8 +13,11 @@ Platform conventions: https://proappstore.online/skills.md
 ## Data model (`migrations.json`)
 
 - `leads` — one row per contact. Social profiles (`linkedin`, `twitter`, `instagram`,
-  `facebook`, `tiktok`, `youtube`, `github`) are stored as typed: a full URL or a bare
-  handle. `web/src/lib/socials.ts` turns either into a link.
+  `facebook`, `tiktok`, `youtube`, `github`) hold LINKS only: the full `https://` profile URL on
+  that platform's domain, or null. Enforced in SQL by `create_lead` / `update_lead` (a bad value
+  makes the write affect 0 rows), explained to agents by `check_lead_links`, and mirrored in the
+  form by `web/src/lib/socials.ts` — keep the domain lists in step. Rows saved before this rule
+  may still hold names; the table flags them as "no link".
   `source` is where the lead was found (a Facebook group, a community, an event) — not
   their employer, which is `company`.
 - `lists` — a named category of leads with a `purpose`.

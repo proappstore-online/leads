@@ -127,9 +127,9 @@
     },
     {
       "name": "create_lead",
-      "description": "Add a lead (contact) to the database",
+      "description": "Add a lead (contact) to the database. LINKS ONLY: every social profile field (linkedin, twitter, instagram, facebook, tiktok, youtube, github) must be the full https:// URL of the profile on that platform, or null when the URL is unknown. Never send a person's name, a handle, or a display label in these fields. If any of them is not a valid profile URL the lead is NOT saved and the result shows \"changes\": 0 — call check_lead_links with the same values to see which field was rejected.",
       "operation": "execute",
-      "sql": "INSERT INTO leads (id, user_id, name, title, company, source, email, phone, website, location, linkedin, twitter, instagram, facebook, tiktok, youtube, github, status, notes, created_at, updated_at) VALUES (:id, :__user_id, :name, :title, :company, :source, :email, :phone, :website, :location, :linkedin, :twitter, :instagram, :facebook, :tiktok, :youtube, :github, :status, :notes, :__now, :__now)",
+      "sql": "INSERT INTO leads (id, user_id, name, title, company, source, email, phone, website, location, linkedin, twitter, instagram, facebook, tiktok, youtube, github, status, notes, created_at, updated_at) SELECT :id, :__user_id, :name, :title, :company, :source, :email, :phone, :website, :location, :linkedin, :twitter, :instagram, :facebook, :tiktok, :youtube, :github, :status, :notes, :__now, :__now WHERE (:linkedin IS NULL OR (:linkedin NOT LIKE '% %' AND (:linkedin LIKE 'https://%linkedin.com/_%'))) AND (:twitter IS NULL OR (:twitter NOT LIKE '% %' AND (:twitter LIKE 'https://%x.com/_%' OR :twitter LIKE 'https://%twitter.com/_%'))) AND (:instagram IS NULL OR (:instagram NOT LIKE '% %' AND (:instagram LIKE 'https://%instagram.com/_%'))) AND (:facebook IS NULL OR (:facebook NOT LIKE '% %' AND (:facebook LIKE 'https://%facebook.com/_%' OR :facebook LIKE 'https://%fb.com/_%' OR :facebook LIKE 'https://%fb.me/_%'))) AND (:tiktok IS NULL OR (:tiktok NOT LIKE '% %' AND (:tiktok LIKE 'https://%tiktok.com/_%'))) AND (:youtube IS NULL OR (:youtube NOT LIKE '% %' AND (:youtube LIKE 'https://%youtube.com/_%' OR :youtube LIKE 'https://%youtu.be/_%'))) AND (:github IS NULL OR (:github NOT LIKE '% %' AND (:github LIKE 'https://%github.com/_%')))",
       "params": {
         "id": {
           "type": "string",
@@ -177,37 +177,37 @@
         "linkedin": {
           "type": "string",
           "optional": true,
-          "description": "LinkedIn profile URL or handle"
+          "description": "LinkedIn profile LINK — the full URL starting with https:// on linkedin.com, e.g. https://www.linkedin.com/in/jane-doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "twitter": {
           "type": "string",
           "optional": true,
-          "description": "X / Twitter profile URL or handle"
+          "description": "X / Twitter profile LINK — the full URL starting with https:// on x.com or twitter.com, e.g. https://x.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "instagram": {
           "type": "string",
           "optional": true,
-          "description": "Instagram profile URL or handle"
+          "description": "Instagram profile LINK — the full URL starting with https:// on instagram.com, e.g. https://www.instagram.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "facebook": {
           "type": "string",
           "optional": true,
-          "description": "Facebook profile URL or handle"
+          "description": "Facebook profile LINK — the full URL starting with https:// on facebook.com or fb.com or fb.me, e.g. https://www.facebook.com/jane.doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "tiktok": {
           "type": "string",
           "optional": true,
-          "description": "TikTok profile URL or handle"
+          "description": "TikTok profile LINK — the full URL starting with https:// on tiktok.com, e.g. https://www.tiktok.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "youtube": {
           "type": "string",
           "optional": true,
-          "description": "YouTube channel URL or handle"
+          "description": "YouTube profile LINK — the full URL starting with https:// on youtube.com or youtu.be, e.g. https://www.youtube.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "github": {
           "type": "string",
           "optional": true,
-          "description": "GitHub profile URL or handle"
+          "description": "GitHub profile LINK — the full URL starting with https:// on github.com, e.g. https://github.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "status": {
           "type": "string",
@@ -225,9 +225,9 @@
     },
     {
       "name": "update_lead",
-      "description": "Update every field of a lead",
+      "description": "Update every field of a lead (fields you omit are cleared). LINKS ONLY: every social profile field (linkedin, twitter, instagram, facebook, tiktok, youtube, github) must be the full https:// URL of the profile on that platform, or null when the URL is unknown. Never send a person's name, a handle, or a display label in these fields. If any of them is not a valid profile URL the lead is NOT saved and the result shows \"changes\": 0 — call check_lead_links with the same values to see which field was rejected. \"changes\": 0 can also mean the id does not exist.",
       "operation": "execute",
-      "sql": "UPDATE leads SET name = :name, title = :title, company = :company, source = :source, email = :email, phone = :phone, website = :website, location = :location, linkedin = :linkedin, twitter = :twitter, instagram = :instagram, facebook = :facebook, tiktok = :tiktok, youtube = :youtube, github = :github, status = :status, notes = :notes, updated_at = :__now WHERE id = :id AND user_id = :__user_id",
+      "sql": "UPDATE leads SET name = :name, title = :title, company = :company, source = :source, email = :email, phone = :phone, website = :website, location = :location, linkedin = :linkedin, twitter = :twitter, instagram = :instagram, facebook = :facebook, tiktok = :tiktok, youtube = :youtube, github = :github, status = :status, notes = :notes, updated_at = :__now WHERE id = :id AND user_id = :__user_id AND (:linkedin IS NULL OR (:linkedin NOT LIKE '% %' AND (:linkedin LIKE 'https://%linkedin.com/_%'))) AND (:twitter IS NULL OR (:twitter NOT LIKE '% %' AND (:twitter LIKE 'https://%x.com/_%' OR :twitter LIKE 'https://%twitter.com/_%'))) AND (:instagram IS NULL OR (:instagram NOT LIKE '% %' AND (:instagram LIKE 'https://%instagram.com/_%'))) AND (:facebook IS NULL OR (:facebook NOT LIKE '% %' AND (:facebook LIKE 'https://%facebook.com/_%' OR :facebook LIKE 'https://%fb.com/_%' OR :facebook LIKE 'https://%fb.me/_%'))) AND (:tiktok IS NULL OR (:tiktok NOT LIKE '% %' AND (:tiktok LIKE 'https://%tiktok.com/_%'))) AND (:youtube IS NULL OR (:youtube NOT LIKE '% %' AND (:youtube LIKE 'https://%youtube.com/_%' OR :youtube LIKE 'https://%youtu.be/_%'))) AND (:github IS NULL OR (:github NOT LIKE '% %' AND (:github LIKE 'https://%github.com/_%')))",
       "params": {
         "id": {
           "type": "string",
@@ -275,37 +275,37 @@
         "linkedin": {
           "type": "string",
           "optional": true,
-          "description": "LinkedIn profile URL or handle"
+          "description": "LinkedIn profile LINK — the full URL starting with https:// on linkedin.com, e.g. https://www.linkedin.com/in/jane-doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "twitter": {
           "type": "string",
           "optional": true,
-          "description": "X / Twitter profile URL or handle"
+          "description": "X / Twitter profile LINK — the full URL starting with https:// on x.com or twitter.com, e.g. https://x.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "instagram": {
           "type": "string",
           "optional": true,
-          "description": "Instagram profile URL or handle"
+          "description": "Instagram profile LINK — the full URL starting with https:// on instagram.com, e.g. https://www.instagram.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "facebook": {
           "type": "string",
           "optional": true,
-          "description": "Facebook profile URL or handle"
+          "description": "Facebook profile LINK — the full URL starting with https:// on facebook.com or fb.com or fb.me, e.g. https://www.facebook.com/jane.doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "tiktok": {
           "type": "string",
           "optional": true,
-          "description": "TikTok profile URL or handle"
+          "description": "TikTok profile LINK — the full URL starting with https:// on tiktok.com, e.g. https://www.tiktok.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "youtube": {
           "type": "string",
           "optional": true,
-          "description": "YouTube channel URL or handle"
+          "description": "YouTube profile LINK — the full URL starting with https:// on youtube.com or youtu.be, e.g. https://www.youtube.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "github": {
           "type": "string",
           "optional": true,
-          "description": "GitHub profile URL or handle"
+          "description": "GitHub profile LINK — the full URL starting with https:// on github.com, e.g. https://github.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
         },
         "status": {
           "type": "string",
@@ -317,6 +317,50 @@
           "type": "string",
           "optional": true,
           "description": "Free-form notes"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "check_lead_links",
+      "description": "Validate social profile links before or after create_lead / update_lead. Returns one row with a verdict per field: 'ok', or 'REJECTED' with the reason. Writes nothing.",
+      "operation": "query",
+      "sql": "SELECT CASE WHEN (:linkedin IS NULL OR (:linkedin NOT LIKE '% %' AND (:linkedin LIKE 'https://%linkedin.com/_%'))) THEN 'ok' ELSE 'REJECTED - must be the full https URL of the profile on linkedin.com, for example https://www.linkedin.com/in/jane-doe - not a name or a handle. Send null when the URL is unknown' END AS linkedin, CASE WHEN (:twitter IS NULL OR (:twitter NOT LIKE '% %' AND (:twitter LIKE 'https://%x.com/_%' OR :twitter LIKE 'https://%twitter.com/_%'))) THEN 'ok' ELSE 'REJECTED - must be the full https URL of the profile on x.com or twitter.com, for example https://x.com/janedoe - not a name or a handle. Send null when the URL is unknown' END AS twitter, CASE WHEN (:instagram IS NULL OR (:instagram NOT LIKE '% %' AND (:instagram LIKE 'https://%instagram.com/_%'))) THEN 'ok' ELSE 'REJECTED - must be the full https URL of the profile on instagram.com, for example https://www.instagram.com/janedoe - not a name or a handle. Send null when the URL is unknown' END AS instagram, CASE WHEN (:facebook IS NULL OR (:facebook NOT LIKE '% %' AND (:facebook LIKE 'https://%facebook.com/_%' OR :facebook LIKE 'https://%fb.com/_%' OR :facebook LIKE 'https://%fb.me/_%'))) THEN 'ok' ELSE 'REJECTED - must be the full https URL of the profile on facebook.com or fb.com or fb.me, for example https://www.facebook.com/jane.doe - not a name or a handle. Send null when the URL is unknown' END AS facebook, CASE WHEN (:tiktok IS NULL OR (:tiktok NOT LIKE '% %' AND (:tiktok LIKE 'https://%tiktok.com/_%'))) THEN 'ok' ELSE 'REJECTED - must be the full https URL of the profile on tiktok.com, for example https://www.tiktok.com/@janedoe - not a name or a handle. Send null when the URL is unknown' END AS tiktok, CASE WHEN (:youtube IS NULL OR (:youtube NOT LIKE '% %' AND (:youtube LIKE 'https://%youtube.com/_%' OR :youtube LIKE 'https://%youtu.be/_%'))) THEN 'ok' ELSE 'REJECTED - must be the full https URL of the profile on youtube.com or youtu.be, for example https://www.youtube.com/@janedoe - not a name or a handle. Send null when the URL is unknown' END AS youtube, CASE WHEN (:github IS NULL OR (:github NOT LIKE '% %' AND (:github LIKE 'https://%github.com/_%'))) THEN 'ok' ELSE 'REJECTED - must be the full https URL of the profile on github.com, for example https://github.com/janedoe - not a name or a handle. Send null when the URL is unknown' END AS github",
+      "params": {
+        "linkedin": {
+          "type": "string",
+          "optional": true,
+          "description": "The LinkedIn value you intend to save"
+        },
+        "twitter": {
+          "type": "string",
+          "optional": true,
+          "description": "The X / Twitter value you intend to save"
+        },
+        "instagram": {
+          "type": "string",
+          "optional": true,
+          "description": "The Instagram value you intend to save"
+        },
+        "facebook": {
+          "type": "string",
+          "optional": true,
+          "description": "The Facebook value you intend to save"
+        },
+        "tiktok": {
+          "type": "string",
+          "optional": true,
+          "description": "The TikTok value you intend to save"
+        },
+        "youtube": {
+          "type": "string",
+          "optional": true,
+          "description": "The YouTube value you intend to save"
+        },
+        "github": {
+          "type": "string",
+          "optional": true,
+          "description": "The GitHub value you intend to save"
         }
       },
       "requires_auth": true
