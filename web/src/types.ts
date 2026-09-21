@@ -41,6 +41,10 @@ export type Lead = { [K in keyof LeadFields]: LeadFields[K] | null } & {
   last_message_at: number | null
   /** Time of the lead's most recent message to you (direction 'in'), null when they never replied. */
   last_reply_at: number | null
+  /** 1 when the lead is flagged for the owner (by an agent or by hand), with why and when. */
+  needs_attention: number
+  attention_reason: string | null
+  attention_at: number | null
   /** When the lead was found (epoch ms) — set by agents, never cleared by the form. */
   found_at: number | null
   created_at: number

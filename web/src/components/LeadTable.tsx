@@ -38,9 +38,13 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
         </thead>
         <tbody>
           {leads.map((lead) => (
-            <tr key={lead.id} onClick={() => onOpen(lead)} className="cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--glass-hover)]">
+            <tr key={lead.id} onClick={() => onOpen(lead)} className={`cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--glass-hover)] ${lead.needs_attention ? 'bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] shadow-[inset_3px_0_0_var(--warning)]' : ''}`}>
               <td className="px-4 py-3">
-                <div className="font-semibold text-[var(--ink)]">{lead.name}</div>
+                <div className="font-semibold text-[var(--ink)]">
+                  {lead.name}
+                  {lead.needs_attention ? <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--paper)]">Needs attention</span> : null}
+                </div>
+                {lead.needs_attention && lead.attention_reason ? <div className="text-xs font-medium text-[var(--warning)]">{lead.attention_reason}</div> : null}
                 <div className="text-xs text-[var(--muted)]">{[lead.title, lead.company].filter(Boolean).join(' · ')}</div>
                 {(lead.source || lead.source_url) && (
                   <div className="text-xs text-[var(--muted)]" onClick={(e) => e.stopPropagation()}>

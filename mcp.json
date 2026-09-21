@@ -5,7 +5,7 @@
       "operation": "query",
       "requires_auth": true,
       "description": "READ THIS FIRST. The conventions of this lead database - which field holds what, the links-only rule, allowed values, and which tool to use for each job.",
-      "sql": "SELECT j.key + 1 AS step, json_extract(j.value, '$[0]') AS topic, json_extract(j.value, '$[1]') AS guidance FROM json_each('[[\"start here\", \"This is one person''s lead database. Leads are people. Lists are categories of leads, one list per purpose or role, and a lead can be in many lists. Every lead can have a recorded conversation.\"], [\"adding a lead\", \"1) find_lead with the profile URL or email to see if the person already exists. 2) create_lead with a new random UUID. 3) add_lead_to_list. If changes is 0 nothing was saved - read the create_lead description for the three reasons.\"], [\"links only\", \"linkedin, twitter, instagram, facebook, tiktok, youtube, github and source_url hold full https links only, never a name or handle. Unknown means null. check_lead_links explains a rejection.\"], [\"which field\", \"name is the person. title is their job or the role they want. company is their employer, never the group where you found them. source says where you found them in words, source_url is the link to that exact post or page. fit is high, med or low. Do not put fit, HOT flags or found-times into title or notes - use fit and found_at.\"], [\"changing a lead\", \"Use enrich_lead to add or fix fields - it touches only what you pass and by default fills only empty fields. Use set_lead_status for the stage. Avoid update_lead - it is a full replace and clears every field you leave out.\"], [\"status\", \"new = not contacted yet. contacted = the user wrote and has no answer. replied = the lead answered. qualified, won, lost are decided by the user. Keep status in step with the recorded conversation.\"], [\"conversations\", \"Use add_messages to record a thread in one call - it keeps order and skips messages already stored, so it is safe to repeat. direction out = sent by the user, in = sent by the lead. occurred_at is the real send time of EACH message in epoch milliseconds, not the time you logged it and not one time for the whole thread.\"], [\"platforms\", \"Allowed platform values - LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other.\"], [\"reading\", \"list_leads filters by list_id, status, fit and q (search) and sorts by name, email, status, fit, last_contact, last_reply, found or created. get_lead reads one lead. list_messages reads a conversation oldest first.\"]]') AS j WHERE :__user_id IS NOT NULL ORDER BY j.key",
+      "sql": "SELECT j.key + 1 AS step, json_extract(j.value, '$[0]') AS topic, json_extract(j.value, '$[1]') AS guidance FROM json_each('[[\"start here\", \"This is one person''s lead database. Leads are people. Lists are categories of leads, one list per purpose or role, and a lead can be in many lists. Every lead can have a recorded conversation.\"], [\"adding a lead\", \"1) find_lead with the profile URL or email to see if the person already exists. 2) create_lead with a new random UUID. 3) add_lead_to_list. If changes is 0 nothing was saved - read the create_lead description for the three reasons.\"], [\"links only\", \"linkedin, twitter, instagram, facebook, tiktok, youtube, github and source_url hold full https links only, never a name or handle. Unknown means null. check_lead_links explains a rejection.\"], [\"which field\", \"name is the person. title is their job or the role they want. company is their employer, never the group where you found them. source says where you found them in words, source_url is the link to that exact post or page. fit is high, med or low. Do not put fit, HOT flags or found-times into title or notes - use fit and found_at.\"], [\"changing a lead\", \"Use enrich_lead to add or fix fields - it touches only what you pass and by default fills only empty fields. Use set_lead_status for the stage. Avoid update_lead - it is a full replace and clears every field you leave out.\"], [\"status\", \"new = not contacted yet. contacted = the user wrote and has no answer. replied = the lead answered. qualified, won, lost are decided by the user. Keep status in step with the recorded conversation.\"], [\"needs attention\", \"When you should not or cannot continue on your own - a question only the owner can answer, a request for a call, a lead ready to commit, an upset lead, a suspected duplicate, or any doubt - call flag_needs_attention with a short reason and stop working on that lead. It is separate from status. The owner clears the mark in the app.\"], [\"conversations\", \"Use add_messages to record a thread in one call - it keeps order and skips messages already stored, so it is safe to repeat. direction out = sent by the user, in = sent by the lead. occurred_at is the real send time of EACH message in epoch milliseconds, not the time you logged it and not one time for the whole thread.\"], [\"platforms\", \"Allowed platform values - LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other.\"], [\"reading\", \"list_leads filters by list_id, status, fit and q (search) and sorts by name, email, status, fit, last_contact, last_reply, found or created. get_lead reads one lead. list_messages reads a conversation oldest first.\"]]') AS j WHERE :__user_id IS NOT NULL ORDER BY j.key",
       "params": {}
     },
     {
@@ -78,9 +78,9 @@
     },
     {
       "name": "list_leads",
-      "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term, and sorted. list_ids is a comma-separated string of the lists each lead belongs to. last_message_at is the time of the most recent recorded message (epoch ms), null if none; last_reply_at is the time of the lead's most recent message to the user (direction 'in'), null if they never replied",
+      "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term, and sorted. list_ids is a comma-separated string of the lists each lead belongs to. last_message_at is the time of the most recent recorded message (epoch ms), null if none; last_reply_at is the time of the lead's most recent message to the user (direction 'in'), null if they never replied. needs_attention is 1 when the lead is flagged for the owner, with attention_reason and attention_at. Leads that need attention are always listed first, then the chosen sort applies",
       "operation": "query",
-      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:fit IS NULL OR l.fit = :fit) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.source LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY CASE WHEN :dir = 'desc' THEN NULL ELSE CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE ASC NULLS LAST, CASE WHEN :dir = 'desc' THEN CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE DESC NULLS LAST, l.name COLLATE NOCASE, l.id LIMIT :limit OFFSET :offset",
+      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:fit IS NULL OR l.fit = :fit) AND (:needs_attention IS NULL OR l.needs_attention = :needs_attention) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.source LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY l.needs_attention DESC, CASE WHEN :dir = 'desc' THEN NULL ELSE CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'attention' THEN l.attention_at WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE ASC NULLS LAST, CASE WHEN :dir = 'desc' THEN CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'attention' THEN l.attention_at WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE DESC NULLS LAST, l.name COLLATE NOCASE, l.id LIMIT :limit OFFSET :offset",
       "params": {
         "list_id": {
           "type": "string",
@@ -97,6 +97,11 @@
           "optional": true,
           "description": "Only leads with this fit: high, med or low"
         },
+        "needs_attention": {
+          "type": "boolean",
+          "optional": true,
+          "description": "true = only leads marked as needing the owner's attention, false = only unmarked leads"
+        },
         "q": {
           "type": "string",
           "optional": true,
@@ -106,7 +111,7 @@
           "type": "string",
           "optional": true,
           "default": "name",
-          "description": "Sort by name, email, status (pipeline order), fit (high first), last_contact, last_reply, found, or created"
+          "description": "Sort by name, email, status (pipeline order), fit (high first), last_contact, last_reply, attention (when it was flagged), found, or created"
         },
         "dir": {
           "type": "string",
@@ -132,9 +137,9 @@
     },
     {
       "name": "count_leads",
-      "description": "Total number of leads in the signed-in user's database",
+      "description": "Total number of leads in the signed-in user's database, and how many are marked as needing attention",
       "operation": "query",
-      "sql": "SELECT COUNT(*) AS total FROM leads WHERE user_id = :__user_id",
+      "sql": "SELECT COUNT(*) AS total, COALESCE(SUM(needs_attention), 0) AS needs_attention FROM leads WHERE user_id = :__user_id",
       "params": {},
       "requires_auth": true
     },
@@ -421,6 +426,36 @@
         "status": {
           "type": "string",
           "description": "Pipeline stage: new (not contacted), contacted (you wrote, no answer yet), replied (the lead answered), qualified, won, lost"
+        }
+      }
+    },
+    {
+      "name": "flag_needs_attention",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Mark a lead as NEEDS ATTENTION from the human owner, with the reason. Use it whenever you should not or cannot continue on your own - the lead asked something only the owner can answer, wants a call, is ready to commit, is upset, looks like a duplicate, or you are unsure what to do. It does not change the pipeline status. Flagging again replaces the reason. \"changes\": 0 means the id does not exist or the reason is empty.",
+      "sql": "UPDATE leads SET needs_attention = 1, attention_reason = :reason, attention_at = :__now, updated_at = :__now WHERE id = :id AND user_id = :__user_id AND trim(:reason) <> ''",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "reason": {
+          "type": "string",
+          "description": "One or two sentences: what happened and what the owner needs to do. Shown to the owner in the app"
+        }
+      }
+    },
+    {
+      "name": "clear_needs_attention",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Remove the needs-attention mark from a lead once the owner has dealt with it. Normally the owner does this in the app - an agent should only clear a flag it raised by mistake.",
+      "sql": "UPDATE leads SET needs_attention = 0, attention_reason = NULL, attention_at = NULL, updated_at = :__now WHERE id = :id AND user_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
         }
       }
     },

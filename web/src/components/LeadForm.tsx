@@ -47,6 +47,7 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
   // Messages save immediately, so closing after a change must still refresh the table.
   const [messagesChanged, setMessagesChanged] = useState(false)
   const close = messagesChanged ? onSaved : onClose
+  const [attentionReason, setAttentionReason] = useState('')
 
   const set = (key: keyof LeadFields, value: string) => setFields((f) => ({ ...f, [key]: value }))
 
@@ -118,6 +119,22 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
           ))}
         </div>
       )}
+      {lead && (lead.needs_attention ? (
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--warning)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] px-4 py-3">
+          <div className="min-w-0 select-text">
+            <div className="text-xs font-bold uppercase tracking-wider text-[var(--warning)]">
+              Needs attention{lead.attention_at ? ` · ${new Date(lead.attention_at).toLocaleString()}` : ''}
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink)]">{lead.attention_reason}</p>
+          </div>
+          <button type="button" disabled={saving} onClick={() => run(() => x('clear_needs_attention', { id: lead.id }).then(() => undefined))} className="shrink-0 rounded-xl bg-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Mark handled</button>
+        </div>
+      ) : (
+        <div className="mt-4 flex gap-2">
+          <input type="text" aria-label="Why this lead needs attention" value={attentionReason} onChange={(e) => setAttentionReason(e.target.value)} placeholder="Flag as needs attention — say why" className={`${inputClass} mt-0`} />
+          <button type="button" disabled={saving || !attentionReason.trim()} onClick={() => run(() => x('flag_needs_attention', { id: lead.id, reason: attentionReason.trim() }).then(() => undefined))} className="shrink-0 rounded-xl border border-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--warning)] disabled:opacity-40">Flag</button>
+        </div>
+      ))}
       {lead && tab === 'conversation' && <Conversation lead={lead} onChanged={() => setMessagesChanged(true)} />}
       <form onSubmit={save} hidden={tab !== 'details'} className="mt-4 space-y-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

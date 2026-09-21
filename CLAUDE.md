@@ -30,6 +30,10 @@ Platform conventions: https://proappstore.online/skills.md
 - `leads.fit` (`high`/`med`/`low`), `leads.source` + `leads.source_url` (where the lead was
   found, in words and as a link), `leads.found_at` (epoch ms). `company` is the lead's employer,
   never the group they were found in.
+- `leads.needs_attention` (0/1) + `attention_reason` + `attention_at` — a flag for the owner,
+  raised by agents (`flag_needs_attention`) or by hand, separate from `status`. Flagged leads are
+  always listed first by `list_leads`, highlighted in the table, and have their own sidebar view.
+  No lead write other than `clear_needs_attention` resets it.
 - `messages.seq` keeps thread order when several messages share a timestamp.
 
 Every row carries `user_id`; each signed-in user sees only their own database.
