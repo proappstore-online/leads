@@ -3,7 +3,7 @@ import { ProShell } from '@proappstore/sdk'
 import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { q } from './lib/actions'
-import { STATUSES, type Lead, type LeadList, type Sort, type SortKey } from './types'
+import { FITS, STATUSES, type Lead, type LeadList, type Sort, type SortKey } from './types'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
@@ -33,6 +33,7 @@ function Home() {
   const [listId, setListId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [fit, setFit] = useState('')
   const [sort, setSort] = useState<Sort>({ key: 'name', dir: 'asc' })
   const [editingLead, setEditingLead] = useState<Lead | 'new' | null>(null)
   const [editingList, setEditingList] = useState<LeadList | 'new' | null>(null)
@@ -52,7 +53,7 @@ function Home() {
     const id = ++request.current
     setLoading(true)
     try {
-      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
+      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, fit: fit || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
       setHasMore(rows.length === PAGE)
@@ -62,7 +63,7 @@ function Home() {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [listId, status, search, sort])
+  }, [listId, status, fit, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
 
@@ -136,6 +137,15 @@ function Home() {
             <option value="">Any status</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select
+            aria-label="Filter by fit"
+            value={fit}
+            onChange={(e) => setFit(e.target.value)}
+            className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
+          >
+            <option value="">Any fit</option>
+            {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
         </div>
 
         {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
@@ -145,7 +155,7 @@ function Home() {
             <LeadTable leads={leads} lists={lists} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
-              {loading ? 'Loading…' : search || status ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}
+              {loading ? 'Loading…' : search || status || fit ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}
             </p>
           )}
           {hasMore && (

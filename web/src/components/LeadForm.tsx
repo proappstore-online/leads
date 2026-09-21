@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { x } from '../lib/actions'
 import { SOCIALS, isProfileLink } from '../lib/socials'
-import { STATUSES, type Lead, type LeadFields, type LeadList } from '../types'
+import { FITS, STATUSES, type Lead, type LeadFields, type LeadList } from '../types'
 import { Conversation } from './Conversation'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
@@ -11,6 +11,7 @@ const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholde
   { key: 'title', label: 'Title / role', placeholder: 'Head of Partnerships' },
   { key: 'company', label: 'Company' },
   { key: 'source', label: 'Found in', placeholder: 'Facebook group: Jobs in Melbourne' },
+  { key: 'source_url', label: 'Found-in link', placeholder: 'https://www.facebook.com/groups/…/posts/…' },
   { key: 'email', label: 'Email', type: 'email' },
   { key: 'phone', label: 'Phone', type: 'tel' },
   { key: 'website', label: 'Website', placeholder: 'example.com' },
@@ -18,9 +19,9 @@ const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholde
 ]
 
 const EMPTY: LeadFields = {
-  name: '', title: '', company: '', source: '', email: '', phone: '', website: '', location: '',
+  name: '', title: '', company: '', source: '', source_url: '', email: '', phone: '', website: '', location: '',
   linkedin: '', twitter: '', instagram: '', facebook: '', tiktok: '', youtube: '', github: '',
-  status: 'new', notes: '',
+  fit: '', status: 'new', notes: '',
 }
 
 function toFields(lead: Lead): LeadFields {
@@ -75,14 +76,18 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
       setError(notLinks.map(({ label, example }) => `${label} must be the full profile link, like ${example} — not a name or handle. Clear it if you don't have the link.`).join(' '))
       return
     }
+    if (fields.source_url.trim() && !/^https:\/\/\S+$/i.test(fields.source_url.trim())) {
+      setError('Found-in link must be a full https:// link to the post or page. Clear it if you don\'t have one.')
+      return
+    }
     const id = lead?.id ?? crypto.randomUUID()
     const params: Record<string, unknown> = { id }
     for (const [key, value] of Object.entries(fields)) params[key] = value.trim() || null
     const before = new Set(lead ? memberOf : [])
     run(async () => {
       const { changes } = await x(lead ? 'update_lead' : 'create_lead', params)
-      // The actions refuse the whole write when a social field is not a profile link.
-      if (changes === 0) throw new Error('Not saved: every social profile must be a full https:// profile link.')
+      // The actions refuse the whole write on a non-link social field or a duplicate email / profile link.
+      if (changes === 0) throw new Error('Not saved. Either a link is not a full https:// link, or another lead already has this email or profile link.')
       await Promise.all([
         ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id })),
         ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id })),
@@ -168,15 +173,24 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-4">
+          <label className="block">
+            <span className="text-sm font-medium text-[var(--ink)]">Fit</span>
+            <select value={fields.fit} onChange={(e) => set('fit', e.target.value)} className={`${inputClass} capitalize`}>
+              <option value="">Not rated</option>
+              {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </label>
           <label className="block">
             <span className="text-sm font-medium text-[var(--ink)]">Status</span>
             <select value={fields.status} onChange={(e) => set('status', e.target.value)} className={`${inputClass} capitalize`}>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
+          </div>
           <label className="block sm:col-span-2">
             <span className="text-sm font-medium text-[var(--ink)]">Notes</span>
-            <textarea value={fields.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className={`${inputClass} resize-none`} />
+            <textarea value={fields.notes} onChange={(e) => set('notes', e.target.value)} rows={6} className={`${inputClass} resize-none`} />
           </label>
         </div>
 

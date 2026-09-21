@@ -1,6 +1,14 @@
 {
   "tools": [
     {
+      "name": "how_to_use",
+      "operation": "query",
+      "requires_auth": true,
+      "description": "READ THIS FIRST. The conventions of this lead database - which field holds what, the links-only rule, allowed values, and which tool to use for each job.",
+      "sql": "SELECT 1 AS step, 'start here' AS topic, 'This is one person''s lead database. Leads are people. Lists are categories of leads, one list per purpose or role, and a lead can be in many lists. Every lead can have a recorded conversation.' AS guidance UNION ALL SELECT 2, 'adding a lead', '1) find_lead with the profile URL or email to see if the person already exists. 2) create_lead with a new random UUID. 3) add_lead_to_list. If changes is 0 nothing was saved - read the create_lead description for the three reasons.' UNION ALL SELECT 3, 'links only', 'linkedin, twitter, instagram, facebook, tiktok, youtube, github and source_url hold full https links only, never a name or handle. Unknown means null. check_lead_links explains a rejection.' UNION ALL SELECT 4, 'which field', 'name is the person. title is their job or the role they want. company is their employer, never the group where you found them. source says where you found them in words, source_url is the link to that exact post or page. fit is high, med or low. Do not put fit, HOT flags or found-times into title or notes - use fit and found_at.' UNION ALL SELECT 5, 'changing a lead', 'Use enrich_lead to add or fix fields - it touches only what you pass and by default fills only empty fields. Use set_lead_status for the stage. Avoid update_lead - it is a full replace and clears every field you leave out.' UNION ALL SELECT 6, 'status', 'new = not contacted yet. contacted = the user wrote and has no answer. replied = the lead answered. qualified, won, lost are decided by the user. Keep status in step with the recorded conversation.' UNION ALL SELECT 7, 'conversations', 'Use add_messages to record a thread in one call - it keeps order and skips messages already stored, so it is safe to repeat. direction out = sent by the user, in = sent by the lead. occurred_at is the real send time of EACH message in epoch milliseconds, not the time you logged it and not one time for the whole thread.' UNION ALL SELECT 8, 'platforms', 'Allowed platform values - LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other.' UNION ALL SELECT 9, 'reading', 'list_leads filters by list_id, status, fit and q (search) and sorts by name, email, status, fit, last_contact, last_reply, found or created. get_lead reads one lead. list_messages reads a conversation oldest first.' ORDER BY step",
+      "params": {}
+    },
+    {
       "name": "list_lists",
       "description": "List the signed-in user's lead lists with the number of leads in each",
       "operation": "query",
@@ -72,7 +80,7 @@
       "name": "list_leads",
       "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term, and sorted. list_ids is a comma-separated string of the lists each lead belongs to. last_message_at is the time of the most recent recorded message (epoch ms), null if none; last_reply_at is the time of the lead's most recent message to the user (direction 'in'), null if they never replied",
       "operation": "query",
-      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.source LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY CASE WHEN :dir = 'desc' THEN NULL ELSE CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE ASC NULLS LAST, CASE WHEN :dir = 'desc' THEN CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE DESC NULLS LAST, l.name COLLATE NOCASE, l.id LIMIT :limit OFFSET :offset",
+      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:fit IS NULL OR l.fit = :fit) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.source LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY CASE WHEN :dir = 'desc' THEN NULL ELSE CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE ASC NULLS LAST, CASE WHEN :dir = 'desc' THEN CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE DESC NULLS LAST, l.name COLLATE NOCASE, l.id LIMIT :limit OFFSET :offset",
       "params": {
         "list_id": {
           "type": "string",
@@ -84,6 +92,11 @@
           "optional": true,
           "description": "Only leads with this status"
         },
+        "fit": {
+          "type": "string",
+          "optional": true,
+          "description": "Only leads with this fit: high, med or low"
+        },
         "q": {
           "type": "string",
           "optional": true,
@@ -93,7 +106,7 @@
           "type": "string",
           "optional": true,
           "default": "name",
-          "description": "Sort by name, email, status (pipeline order), last_contact, last_reply, or created"
+          "description": "Sort by name, email, status (pipeline order), fit (high first), last_contact, last_reply, found, or created"
         },
         "dir": {
           "type": "string",
@@ -126,34 +139,12 @@
       "requires_auth": true
     },
     {
-      "name": "create_lead",
-      "description": "Add a lead (contact) to the database. LINKS ONLY: every social profile field (linkedin, twitter, instagram, facebook, tiktok, youtube, github) must be the full https:// URL of the profile on that platform, or null when the URL is unknown. Never send a person's name, a handle, or a display label in these fields. If any of them is not a valid profile URL the lead is NOT saved and the result shows \"changes\": 0 — call check_lead_links with the same values to see which field was rejected.",
-      "operation": "execute",
-      "sql": "INSERT INTO leads (id, user_id, name, title, company, source, email, phone, website, location, linkedin, twitter, instagram, facebook, tiktok, youtube, github, status, notes, created_at, updated_at) SELECT :id, :__user_id, :name, :title, :company, :source, :email, :phone, :website, :location, :linkedin, :twitter, :instagram, :facebook, :tiktok, :youtube, :github, :status, :notes, :__now, :__now WHERE (:linkedin IS NULL OR (:linkedin NOT LIKE '% %' AND (:linkedin LIKE 'https://%linkedin.com/_%'))) AND (:twitter IS NULL OR (:twitter NOT LIKE '% %' AND (:twitter LIKE 'https://%x.com/_%' OR :twitter LIKE 'https://%twitter.com/_%'))) AND (:instagram IS NULL OR (:instagram NOT LIKE '% %' AND (:instagram LIKE 'https://%instagram.com/_%'))) AND (:facebook IS NULL OR (:facebook NOT LIKE '% %' AND (:facebook LIKE 'https://%facebook.com/_%' OR :facebook LIKE 'https://%fb.com/_%' OR :facebook LIKE 'https://%fb.me/_%'))) AND (:tiktok IS NULL OR (:tiktok NOT LIKE '% %' AND (:tiktok LIKE 'https://%tiktok.com/_%'))) AND (:youtube IS NULL OR (:youtube NOT LIKE '% %' AND (:youtube LIKE 'https://%youtube.com/_%' OR :youtube LIKE 'https://%youtu.be/_%'))) AND (:github IS NULL OR (:github NOT LIKE '% %' AND (:github LIKE 'https://%github.com/_%')))",
+      "name": "find_lead",
+      "operation": "query",
+      "requires_auth": true,
+      "description": "Check whether a person is ALREADY in the database before adding them. Exact, case-insensitive match on any of: email, phone, a profile or website URL, or full name. Returns the matching leads (usually 0 or 1). Pass at least one parameter.",
+      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l, (SELECT :email AS email, :phone AS phone, :url AS url, :name AS name) AS p WHERE l.user_id = :__user_id AND ((p.email IS NOT NULL AND lower(l.email) = lower(p.email)) OR (p.phone IS NOT NULL AND replace(l.phone, ' ', '') = replace(p.phone, ' ', '')) OR (p.url IS NOT NULL AND (lower(rtrim(l.linkedin, '/')) = lower(rtrim(p.url, '/')) OR lower(rtrim(l.twitter, '/')) = lower(rtrim(p.url, '/')) OR lower(rtrim(l.instagram, '/')) = lower(rtrim(p.url, '/')) OR lower(rtrim(l.facebook, '/')) = lower(rtrim(p.url, '/')) OR lower(rtrim(l.tiktok, '/')) = lower(rtrim(p.url, '/')) OR lower(rtrim(l.youtube, '/')) = lower(rtrim(p.url, '/')) OR lower(rtrim(l.github, '/')) = lower(rtrim(p.url, '/')) OR lower(rtrim(l.website, '/')) = lower(rtrim(p.url, '/')))) OR (p.name IS NOT NULL AND l.name = p.name COLLATE NOCASE)) ORDER BY l.name COLLATE NOCASE LIMIT 20",
       "params": {
-        "id": {
-          "type": "string",
-          "description": "Client-generated UUID for the lead"
-        },
-        "name": {
-          "type": "string",
-          "description": "Full name"
-        },
-        "title": {
-          "type": "string",
-          "optional": true,
-          "description": "Job title or role"
-        },
-        "company": {
-          "type": "string",
-          "optional": true,
-          "description": "Company or organisation"
-        },
-        "source": {
-          "type": "string",
-          "optional": true,
-          "description": "Where the lead was found: the Facebook group, community, event or page (e.g. 'Facebook group: Jobs in Melbourne'). Not the lead's employer - that is company"
-        },
         "email": {
           "type": "string",
           "optional": true,
@@ -164,70 +155,150 @@
           "optional": true,
           "description": "Phone number"
         },
-        "website": {
+        "url": {
           "type": "string",
           "optional": true,
-          "description": "Website URL"
+          "description": "Any profile URL (LinkedIn, Facebook, ...) or website URL of the person"
+        },
+        "name": {
+          "type": "string",
+          "optional": true,
+          "description": "Full name, exact match. Weakest key - different people share names"
+        }
+      }
+    },
+    {
+      "name": "get_lead",
+      "operation": "query",
+      "requires_auth": true,
+      "description": "Get one lead by ID, with its lists (list_ids) and last_message_at / last_reply_at",
+      "sql": "SELECT l.*, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.id = :id AND l.user_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
+        }
+      }
+    },
+    {
+      "name": "create_lead",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Add a NEW lead (contact). Call find_lead first if the person may already be in the database. LINKS ONLY - every social profile field (linkedin, twitter, instagram, facebook, tiktok, youtube, github) must be the full https:// URL of the profile on that platform, or null when unknown. Never a person's name, a handle or a label. The result shows \"changes\": 1 when saved. \"changes\": 0 means NOTHING was saved, because (a) a social field or source_url is not a valid https:// link - call check_lead_links, (b) status or fit is not an allowed value, or (c) another lead already has the same email or profile URL - call find_lead and use that lead instead.",
+      "sql": "INSERT INTO leads (id, user_id, name, title, company, source, source_url, email, phone, website, location, linkedin, twitter, instagram, facebook, tiktok, youtube, github, fit, status, notes, found_at, created_at, updated_at) SELECT p.id, p.uid, p.name, p.title, p.company, p.source, p.source_url, p.email, p.phone, p.website, p.location, p.linkedin, p.twitter, p.instagram, p.facebook, p.tiktok, p.youtube, p.github, p.fit, p.status, p.notes, p.found_at, p.now, p.now FROM (SELECT :id AS id, :__user_id AS uid, :__now AS now, :name AS name, :title AS title, :company AS company, :source AS source, :source_url AS source_url, :email AS email, :phone AS phone, :website AS website, :location AS location, :linkedin AS linkedin, :twitter AS twitter, :instagram AS instagram, :facebook AS facebook, :tiktok AS tiktok, :youtube AS youtube, :github AS github, :fit AS fit, :status AS status, :notes AS notes, :found_at AS found_at) AS p WHERE trim(p.name) <> '' AND (p.linkedin IS NULL OR (p.linkedin NOT LIKE '% %' AND (p.linkedin LIKE 'https://%linkedin.com/_%'))) AND (p.twitter IS NULL OR (p.twitter NOT LIKE '% %' AND (p.twitter LIKE 'https://%x.com/_%' OR p.twitter LIKE 'https://%twitter.com/_%'))) AND (p.instagram IS NULL OR (p.instagram NOT LIKE '% %' AND (p.instagram LIKE 'https://%instagram.com/_%'))) AND (p.facebook IS NULL OR (p.facebook NOT LIKE '% %' AND (p.facebook LIKE 'https://%facebook.com/_%' OR p.facebook LIKE 'https://%fb.com/_%' OR p.facebook LIKE 'https://%fb.me/_%'))) AND (p.tiktok IS NULL OR (p.tiktok NOT LIKE '% %' AND (p.tiktok LIKE 'https://%tiktok.com/_%'))) AND (p.youtube IS NULL OR (p.youtube NOT LIKE '% %' AND (p.youtube LIKE 'https://%youtube.com/_%' OR p.youtube LIKE 'https://%youtu.be/_%'))) AND (p.github IS NULL OR (p.github NOT LIKE '% %' AND (p.github LIKE 'https://%github.com/_%'))) AND (p.source_url IS NULL OR (p.source_url LIKE 'https://_%' AND p.source_url NOT LIKE '% %')) AND (p.status IS NULL OR p.status IN ('new', 'contacted', 'replied', 'qualified', 'won', 'lost')) AND (p.fit IS NULL OR p.fit IN ('high', 'med', 'low')) AND NOT EXISTS (SELECT 1 FROM leads d WHERE d.user_id = p.uid AND ((p.email IS NOT NULL AND lower(d.email) = lower(p.email)) OR (p.linkedin IS NOT NULL AND lower(rtrim(d.linkedin, '/')) = lower(rtrim(p.linkedin, '/'))) OR (p.twitter IS NOT NULL AND lower(rtrim(d.twitter, '/')) = lower(rtrim(p.twitter, '/'))) OR (p.instagram IS NOT NULL AND lower(rtrim(d.instagram, '/')) = lower(rtrim(p.instagram, '/'))) OR (p.facebook IS NOT NULL AND lower(rtrim(d.facebook, '/')) = lower(rtrim(p.facebook, '/'))) OR (p.tiktok IS NOT NULL AND lower(rtrim(d.tiktok, '/')) = lower(rtrim(p.tiktok, '/'))) OR (p.youtube IS NOT NULL AND lower(rtrim(d.youtube, '/')) = lower(rtrim(p.youtube, '/'))) OR (p.github IS NOT NULL AND lower(rtrim(d.github, '/')) = lower(rtrim(p.github, '/')))))",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "New random UUID v4 for the lead - generate it, do not hand-write a pattern"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the person"
+        },
+        "title": {
+          "type": "string",
+          "description": "The lead's job title or the role they are looking for. Not their fit, not HOT flags",
+          "optional": true
+        },
+        "company": {
+          "type": "string",
+          "description": "The lead's employer or own business. NOT the group or place where you found them - that is source",
+          "optional": true
+        },
+        "source": {
+          "type": "string",
+          "description": "Where the lead was found, in words: the group, community, event or page (e.g. 'Facebook group: Jobs in Melbourne')",
+          "optional": true
+        },
+        "source_url": {
+          "type": "string",
+          "description": "https:// link to the exact post, comment, thread or page where the lead was found, so a human can open it",
+          "optional": true
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address",
+          "optional": true
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number",
+          "optional": true
+        },
+        "website": {
+          "type": "string",
+          "description": "Website URL",
+          "optional": true
         },
         "location": {
           "type": "string",
-          "optional": true,
-          "description": "City / country"
+          "description": "City / country",
+          "optional": true
         },
         "linkedin": {
           "type": "string",
-          "optional": true,
-          "description": "LinkedIn profile LINK — the full URL starting with https:// on linkedin.com, e.g. https://www.linkedin.com/in/jane-doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "LinkedIn profile LINK - the full URL starting with https:// on linkedin.com, e.g. https://www.linkedin.com/in/jane-doe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "twitter": {
           "type": "string",
-          "optional": true,
-          "description": "X / Twitter profile LINK — the full URL starting with https:// on x.com or twitter.com, e.g. https://x.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "X / Twitter profile LINK - the full URL starting with https:// on x.com or twitter.com, e.g. https://x.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "instagram": {
           "type": "string",
-          "optional": true,
-          "description": "Instagram profile LINK — the full URL starting with https:// on instagram.com, e.g. https://www.instagram.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "Instagram profile LINK - the full URL starting with https:// on instagram.com, e.g. https://www.instagram.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "facebook": {
           "type": "string",
-          "optional": true,
-          "description": "Facebook profile LINK — the full URL starting with https:// on facebook.com or fb.com or fb.me, e.g. https://www.facebook.com/jane.doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "Facebook profile LINK - the full URL starting with https:// on facebook.com or fb.com or fb.me, e.g. https://www.facebook.com/jane.doe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "tiktok": {
           "type": "string",
-          "optional": true,
-          "description": "TikTok profile LINK — the full URL starting with https:// on tiktok.com, e.g. https://www.tiktok.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "TikTok profile LINK - the full URL starting with https:// on tiktok.com, e.g. https://www.tiktok.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "youtube": {
           "type": "string",
-          "optional": true,
-          "description": "YouTube profile LINK — the full URL starting with https:// on youtube.com or youtu.be, e.g. https://www.youtube.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "YouTube profile LINK - the full URL starting with https:// on youtube.com or youtu.be, e.g. https://www.youtube.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "github": {
           "type": "string",
-          "optional": true,
-          "description": "GitHub profile LINK — the full URL starting with https:// on github.com, e.g. https://github.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "GitHub profile LINK - the full URL starting with https:// on github.com, e.g. https://github.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "fit": {
+          "type": "string",
+          "description": "How well the lead fits the purpose of the list: high, med or low. Use this field - do not write the fit into notes or title",
+          "optional": true
         },
         "status": {
           "type": "string",
+          "description": "Pipeline stage: new (not contacted), contacted (you wrote, no answer yet), replied (the lead answered), qualified, won, lost",
           "optional": true,
-          "default": "new",
-          "description": "new, contacted, replied, qualified, won, or lost"
+          "default": "new"
         },
         "notes": {
           "type": "string",
+          "description": "Free-form notes for facts that have no field of their own",
+          "optional": true
+        },
+        "found_at": {
+          "type": "integer",
           "optional": true,
-          "description": "Free-form notes"
+          "description": "When the lead was found, Unix epoch milliseconds (UTC)"
         }
-      },
-      "requires_auth": true
+      }
     },
     {
-      "name": "update_lead",
-      "description": "Update every field of a lead (fields you omit are cleared). LINKS ONLY: every social profile field (linkedin, twitter, instagram, facebook, tiktok, youtube, github) must be the full https:// URL of the profile on that platform, or null when the URL is unknown. Never send a person's name, a handle, or a display label in these fields. If any of them is not a valid profile URL the lead is NOT saved and the result shows \"changes\": 0 — call check_lead_links with the same values to see which field was rejected. \"changes\": 0 can also mean the id does not exist.",
+      "name": "enrich_lead",
       "operation": "execute",
-      "sql": "UPDATE leads SET name = :name, title = :title, company = :company, source = :source, email = :email, phone = :phone, website = :website, location = :location, linkedin = :linkedin, twitter = :twitter, instagram = :instagram, facebook = :facebook, tiktok = :tiktok, youtube = :youtube, github = :github, status = :status, notes = :notes, updated_at = :__now WHERE id = :id AND user_id = :__user_id AND (:linkedin IS NULL OR (:linkedin NOT LIKE '% %' AND (:linkedin LIKE 'https://%linkedin.com/_%'))) AND (:twitter IS NULL OR (:twitter NOT LIKE '% %' AND (:twitter LIKE 'https://%x.com/_%' OR :twitter LIKE 'https://%twitter.com/_%'))) AND (:instagram IS NULL OR (:instagram NOT LIKE '% %' AND (:instagram LIKE 'https://%instagram.com/_%'))) AND (:facebook IS NULL OR (:facebook NOT LIKE '% %' AND (:facebook LIKE 'https://%facebook.com/_%' OR :facebook LIKE 'https://%fb.com/_%' OR :facebook LIKE 'https://%fb.me/_%'))) AND (:tiktok IS NULL OR (:tiktok NOT LIKE '% %' AND (:tiktok LIKE 'https://%tiktok.com/_%'))) AND (:youtube IS NULL OR (:youtube NOT LIKE '% %' AND (:youtube LIKE 'https://%youtube.com/_%' OR :youtube LIKE 'https://%youtu.be/_%'))) AND (:github IS NULL OR (:github NOT LIKE '% %' AND (:github LIKE 'https://%github.com/_%')))",
+      "requires_auth": true,
+      "description": "Add information to an existing lead WITHOUT touching anything else. Only the fields you pass are considered, and by default only EMPTY fields are filled - pass overwrite true to change values that are already set. append_note adds a line to the notes and never removes existing notes. LINKS ONLY - every social profile field (linkedin, twitter, instagram, facebook, tiktok, youtube, github) must be the full https:// URL of the profile on that platform, or null when unknown. Never a person's name, a handle or a label. The result shows \"changes\": 1 when saved. \"changes\": 0 means NOTHING was saved, because (a) a social field or source_url is not a valid https:// link - call check_lead_links, (b) status or fit is not an allowed value, or (c) another lead already has the same email or profile URL - call find_lead and use that lead instead. \"changes\": 0 can also mean the id does not exist.",
+      "sql": "UPDATE leads SET name = CASE WHEN p.name IS NULL THEN leads.name WHEN p.overwrite = 1 OR leads.name IS NULL OR leads.name = '' THEN p.name ELSE leads.name END, title = CASE WHEN p.title IS NULL THEN leads.title WHEN p.overwrite = 1 OR leads.title IS NULL OR leads.title = '' THEN p.title ELSE leads.title END, company = CASE WHEN p.company IS NULL THEN leads.company WHEN p.overwrite = 1 OR leads.company IS NULL OR leads.company = '' THEN p.company ELSE leads.company END, source = CASE WHEN p.source IS NULL THEN leads.source WHEN p.overwrite = 1 OR leads.source IS NULL OR leads.source = '' THEN p.source ELSE leads.source END, source_url = CASE WHEN p.source_url IS NULL THEN leads.source_url WHEN p.overwrite = 1 OR leads.source_url IS NULL OR leads.source_url = '' THEN p.source_url ELSE leads.source_url END, email = CASE WHEN p.email IS NULL THEN leads.email WHEN p.overwrite = 1 OR leads.email IS NULL OR leads.email = '' THEN p.email ELSE leads.email END, phone = CASE WHEN p.phone IS NULL THEN leads.phone WHEN p.overwrite = 1 OR leads.phone IS NULL OR leads.phone = '' THEN p.phone ELSE leads.phone END, website = CASE WHEN p.website IS NULL THEN leads.website WHEN p.overwrite = 1 OR leads.website IS NULL OR leads.website = '' THEN p.website ELSE leads.website END, location = CASE WHEN p.location IS NULL THEN leads.location WHEN p.overwrite = 1 OR leads.location IS NULL OR leads.location = '' THEN p.location ELSE leads.location END, linkedin = CASE WHEN p.linkedin IS NULL THEN leads.linkedin WHEN p.overwrite = 1 OR leads.linkedin IS NULL OR leads.linkedin = '' THEN p.linkedin ELSE leads.linkedin END, twitter = CASE WHEN p.twitter IS NULL THEN leads.twitter WHEN p.overwrite = 1 OR leads.twitter IS NULL OR leads.twitter = '' THEN p.twitter ELSE leads.twitter END, instagram = CASE WHEN p.instagram IS NULL THEN leads.instagram WHEN p.overwrite = 1 OR leads.instagram IS NULL OR leads.instagram = '' THEN p.instagram ELSE leads.instagram END, facebook = CASE WHEN p.facebook IS NULL THEN leads.facebook WHEN p.overwrite = 1 OR leads.facebook IS NULL OR leads.facebook = '' THEN p.facebook ELSE leads.facebook END, tiktok = CASE WHEN p.tiktok IS NULL THEN leads.tiktok WHEN p.overwrite = 1 OR leads.tiktok IS NULL OR leads.tiktok = '' THEN p.tiktok ELSE leads.tiktok END, youtube = CASE WHEN p.youtube IS NULL THEN leads.youtube WHEN p.overwrite = 1 OR leads.youtube IS NULL OR leads.youtube = '' THEN p.youtube ELSE leads.youtube END, github = CASE WHEN p.github IS NULL THEN leads.github WHEN p.overwrite = 1 OR leads.github IS NULL OR leads.github = '' THEN p.github ELSE leads.github END, fit = CASE WHEN p.fit IS NULL THEN leads.fit WHEN p.overwrite = 1 OR leads.fit IS NULL OR leads.fit = '' THEN p.fit ELSE leads.fit END, found_at = COALESCE(leads.found_at, p.found_at), notes = CASE WHEN p.append_note IS NULL THEN leads.notes WHEN leads.notes IS NULL OR leads.notes = '' THEN p.append_note ELSE leads.notes || char(10) || p.append_note END, updated_at = p.now FROM (SELECT :id AS id, :__user_id AS uid, :__now AS now, :name AS name, :title AS title, :company AS company, :source AS source, :source_url AS source_url, :email AS email, :phone AS phone, :website AS website, :location AS location, :linkedin AS linkedin, :twitter AS twitter, :instagram AS instagram, :facebook AS facebook, :tiktok AS tiktok, :youtube AS youtube, :github AS github, :fit AS fit, :found_at AS found_at, :append_note AS append_note, :overwrite AS overwrite, NULL AS status) AS p WHERE leads.id = p.id AND leads.user_id = p.uid AND (p.linkedin IS NULL OR (p.linkedin NOT LIKE '% %' AND (p.linkedin LIKE 'https://%linkedin.com/_%'))) AND (p.twitter IS NULL OR (p.twitter NOT LIKE '% %' AND (p.twitter LIKE 'https://%x.com/_%' OR p.twitter LIKE 'https://%twitter.com/_%'))) AND (p.instagram IS NULL OR (p.instagram NOT LIKE '% %' AND (p.instagram LIKE 'https://%instagram.com/_%'))) AND (p.facebook IS NULL OR (p.facebook NOT LIKE '% %' AND (p.facebook LIKE 'https://%facebook.com/_%' OR p.facebook LIKE 'https://%fb.com/_%' OR p.facebook LIKE 'https://%fb.me/_%'))) AND (p.tiktok IS NULL OR (p.tiktok NOT LIKE '% %' AND (p.tiktok LIKE 'https://%tiktok.com/_%'))) AND (p.youtube IS NULL OR (p.youtube NOT LIKE '% %' AND (p.youtube LIKE 'https://%youtube.com/_%' OR p.youtube LIKE 'https://%youtu.be/_%'))) AND (p.github IS NULL OR (p.github NOT LIKE '% %' AND (p.github LIKE 'https://%github.com/_%'))) AND (p.source_url IS NULL OR (p.source_url LIKE 'https://_%' AND p.source_url NOT LIKE '% %')) AND (p.status IS NULL OR p.status IN ('new', 'contacted', 'replied', 'qualified', 'won', 'lost')) AND (p.fit IS NULL OR p.fit IN ('high', 'med', 'low')) AND NOT EXISTS (SELECT 1 FROM leads d WHERE d.user_id = p.uid AND d.id <> p.id AND ((p.email IS NOT NULL AND lower(d.email) = lower(p.email)) OR (p.linkedin IS NOT NULL AND lower(rtrim(d.linkedin, '/')) = lower(rtrim(p.linkedin, '/'))) OR (p.twitter IS NOT NULL AND lower(rtrim(d.twitter, '/')) = lower(rtrim(p.twitter, '/'))) OR (p.instagram IS NOT NULL AND lower(rtrim(d.instagram, '/')) = lower(rtrim(p.instagram, '/'))) OR (p.facebook IS NOT NULL AND lower(rtrim(d.facebook, '/')) = lower(rtrim(p.facebook, '/'))) OR (p.tiktok IS NOT NULL AND lower(rtrim(d.tiktok, '/')) = lower(rtrim(p.tiktok, '/'))) OR (p.youtube IS NOT NULL AND lower(rtrim(d.youtube, '/')) = lower(rtrim(p.youtube, '/'))) OR (p.github IS NOT NULL AND lower(rtrim(d.github, '/')) = lower(rtrim(p.github, '/')))))",
       "params": {
         "id": {
           "type": "string",
@@ -235,91 +306,231 @@
         },
         "name": {
           "type": "string",
-          "description": "Full name"
+          "description": "Full name of the person",
+          "optional": true
         },
         "title": {
           "type": "string",
-          "optional": true,
-          "description": "Job title or role"
+          "description": "The lead's job title or the role they are looking for. Not their fit, not HOT flags",
+          "optional": true
         },
         "company": {
           "type": "string",
-          "optional": true,
-          "description": "Company or organisation"
+          "description": "The lead's employer or own business. NOT the group or place where you found them - that is source",
+          "optional": true
         },
         "source": {
           "type": "string",
-          "optional": true,
-          "description": "Where the lead was found: the Facebook group, community, event or page (e.g. 'Facebook group: Jobs in Melbourne'). Not the lead's employer - that is company"
+          "description": "Where the lead was found, in words: the group, community, event or page (e.g. 'Facebook group: Jobs in Melbourne')",
+          "optional": true
+        },
+        "source_url": {
+          "type": "string",
+          "description": "https:// link to the exact post, comment, thread or page where the lead was found, so a human can open it",
+          "optional": true
         },
         "email": {
           "type": "string",
-          "optional": true,
-          "description": "Email address"
+          "description": "Email address",
+          "optional": true
         },
         "phone": {
           "type": "string",
-          "optional": true,
-          "description": "Phone number"
+          "description": "Phone number",
+          "optional": true
         },
         "website": {
           "type": "string",
-          "optional": true,
-          "description": "Website URL"
+          "description": "Website URL",
+          "optional": true
         },
         "location": {
           "type": "string",
-          "optional": true,
-          "description": "City / country"
+          "description": "City / country",
+          "optional": true
         },
         "linkedin": {
           "type": "string",
-          "optional": true,
-          "description": "LinkedIn profile LINK — the full URL starting with https:// on linkedin.com, e.g. https://www.linkedin.com/in/jane-doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "LinkedIn profile LINK - the full URL starting with https:// on linkedin.com, e.g. https://www.linkedin.com/in/jane-doe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "twitter": {
           "type": "string",
-          "optional": true,
-          "description": "X / Twitter profile LINK — the full URL starting with https:// on x.com or twitter.com, e.g. https://x.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "X / Twitter profile LINK - the full URL starting with https:// on x.com or twitter.com, e.g. https://x.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "instagram": {
           "type": "string",
-          "optional": true,
-          "description": "Instagram profile LINK — the full URL starting with https:// on instagram.com, e.g. https://www.instagram.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "Instagram profile LINK - the full URL starting with https:// on instagram.com, e.g. https://www.instagram.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "facebook": {
           "type": "string",
-          "optional": true,
-          "description": "Facebook profile LINK — the full URL starting with https:// on facebook.com or fb.com or fb.me, e.g. https://www.facebook.com/jane.doe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "Facebook profile LINK - the full URL starting with https:// on facebook.com or fb.com or fb.me, e.g. https://www.facebook.com/jane.doe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "tiktok": {
           "type": "string",
-          "optional": true,
-          "description": "TikTok profile LINK — the full URL starting with https:// on tiktok.com, e.g. https://www.tiktok.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "TikTok profile LINK - the full URL starting with https:// on tiktok.com, e.g. https://www.tiktok.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "youtube": {
           "type": "string",
-          "optional": true,
-          "description": "YouTube profile LINK — the full URL starting with https:// on youtube.com or youtu.be, e.g. https://www.youtube.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "YouTube profile LINK - the full URL starting with https:// on youtube.com or youtu.be, e.g. https://www.youtube.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
         },
         "github": {
           "type": "string",
+          "description": "GitHub profile LINK - the full URL starting with https:// on github.com, e.g. https://github.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "fit": {
+          "type": "string",
+          "description": "How well the lead fits the purpose of the list: high, med or low. Use this field - do not write the fit into notes or title",
+          "optional": true
+        },
+        "found_at": {
+          "type": "integer",
           "optional": true,
-          "description": "GitHub profile LINK — the full URL starting with https:// on github.com, e.g. https://github.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL; a non-URL value makes the whole call fail"
+          "description": "When the lead was found, Unix epoch milliseconds (UTC). Only set when not already known"
+        },
+        "append_note": {
+          "type": "string",
+          "optional": true,
+          "description": "A line to add at the end of the notes"
+        },
+        "overwrite": {
+          "type": "boolean",
+          "optional": true,
+          "default": false,
+          "description": "false (default) fills only empty fields. true replaces existing values with the ones you pass"
+        }
+      }
+    },
+    {
+      "name": "set_lead_status",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Change only the pipeline status of a lead. Keep it in step with the conversation - contacted once you have written, replied once the lead has answered. \"changes\": 0 means the id does not exist or the status is not an allowed value.",
+      "sql": "UPDATE leads SET status = :status, updated_at = :__now WHERE id = :id AND user_id = :__user_id AND :status IN ('new', 'contacted', 'replied', 'qualified', 'won', 'lost')",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
         },
         "status": {
           "type": "string",
+          "description": "Pipeline stage: new (not contacted), contacted (you wrote, no answer yet), replied (the lead answered), qualified, won, lost"
+        }
+      }
+    },
+    {
+      "name": "update_lead",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "FULL REPLACE of a lead - every field you omit is CLEARED. Agents should almost always use enrich_lead (fills or changes only the fields you pass) or set_lead_status instead. LINKS ONLY - every social profile field (linkedin, twitter, instagram, facebook, tiktok, youtube, github) must be the full https:// URL of the profile on that platform, or null when unknown. Never a person's name, a handle or a label. The result shows \"changes\": 1 when saved. \"changes\": 0 means NOTHING was saved, because (a) a social field or source_url is not a valid https:// link - call check_lead_links, (b) status or fit is not an allowed value, or (c) another lead already has the same email or profile URL - call find_lead and use that lead instead. \"changes\": 0 can also mean the id does not exist.",
+      "sql": "UPDATE leads SET name = p.name, title = p.title, company = p.company, source = p.source, source_url = p.source_url, email = p.email, phone = p.phone, website = p.website, location = p.location, linkedin = p.linkedin, twitter = p.twitter, instagram = p.instagram, facebook = p.facebook, tiktok = p.tiktok, youtube = p.youtube, github = p.github, fit = p.fit, status = p.status, notes = p.notes, updated_at = p.now FROM (SELECT :id AS id, :__user_id AS uid, :__now AS now, :name AS name, :title AS title, :company AS company, :source AS source, :source_url AS source_url, :email AS email, :phone AS phone, :website AS website, :location AS location, :linkedin AS linkedin, :twitter AS twitter, :instagram AS instagram, :facebook AS facebook, :tiktok AS tiktok, :youtube AS youtube, :github AS github, :fit AS fit, :status AS status, :notes AS notes) AS p WHERE leads.id = p.id AND leads.user_id = p.uid AND trim(p.name) <> '' AND (p.linkedin IS NULL OR (p.linkedin NOT LIKE '% %' AND (p.linkedin LIKE 'https://%linkedin.com/_%'))) AND (p.twitter IS NULL OR (p.twitter NOT LIKE '% %' AND (p.twitter LIKE 'https://%x.com/_%' OR p.twitter LIKE 'https://%twitter.com/_%'))) AND (p.instagram IS NULL OR (p.instagram NOT LIKE '% %' AND (p.instagram LIKE 'https://%instagram.com/_%'))) AND (p.facebook IS NULL OR (p.facebook NOT LIKE '% %' AND (p.facebook LIKE 'https://%facebook.com/_%' OR p.facebook LIKE 'https://%fb.com/_%' OR p.facebook LIKE 'https://%fb.me/_%'))) AND (p.tiktok IS NULL OR (p.tiktok NOT LIKE '% %' AND (p.tiktok LIKE 'https://%tiktok.com/_%'))) AND (p.youtube IS NULL OR (p.youtube NOT LIKE '% %' AND (p.youtube LIKE 'https://%youtube.com/_%' OR p.youtube LIKE 'https://%youtu.be/_%'))) AND (p.github IS NULL OR (p.github NOT LIKE '% %' AND (p.github LIKE 'https://%github.com/_%'))) AND (p.source_url IS NULL OR (p.source_url LIKE 'https://_%' AND p.source_url NOT LIKE '% %')) AND (p.status IS NULL OR p.status IN ('new', 'contacted', 'replied', 'qualified', 'won', 'lost')) AND (p.fit IS NULL OR p.fit IN ('high', 'med', 'low')) AND NOT EXISTS (SELECT 1 FROM leads d WHERE d.user_id = p.uid AND d.id <> p.id AND ((p.email IS NOT NULL AND lower(d.email) = lower(p.email)) OR (p.linkedin IS NOT NULL AND lower(rtrim(d.linkedin, '/')) = lower(rtrim(p.linkedin, '/'))) OR (p.twitter IS NOT NULL AND lower(rtrim(d.twitter, '/')) = lower(rtrim(p.twitter, '/'))) OR (p.instagram IS NOT NULL AND lower(rtrim(d.instagram, '/')) = lower(rtrim(p.instagram, '/'))) OR (p.facebook IS NOT NULL AND lower(rtrim(d.facebook, '/')) = lower(rtrim(p.facebook, '/'))) OR (p.tiktok IS NOT NULL AND lower(rtrim(d.tiktok, '/')) = lower(rtrim(p.tiktok, '/'))) OR (p.youtube IS NOT NULL AND lower(rtrim(d.youtube, '/')) = lower(rtrim(p.youtube, '/'))) OR (p.github IS NOT NULL AND lower(rtrim(d.github, '/')) = lower(rtrim(p.github, '/')))))",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the person"
+        },
+        "title": {
+          "type": "string",
+          "description": "The lead's job title or the role they are looking for. Not their fit, not HOT flags",
+          "optional": true
+        },
+        "company": {
+          "type": "string",
+          "description": "The lead's employer or own business. NOT the group or place where you found them - that is source",
+          "optional": true
+        },
+        "source": {
+          "type": "string",
+          "description": "Where the lead was found, in words: the group, community, event or page (e.g. 'Facebook group: Jobs in Melbourne')",
+          "optional": true
+        },
+        "source_url": {
+          "type": "string",
+          "description": "https:// link to the exact post, comment, thread or page where the lead was found, so a human can open it",
+          "optional": true
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address",
+          "optional": true
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number",
+          "optional": true
+        },
+        "website": {
+          "type": "string",
+          "description": "Website URL",
+          "optional": true
+        },
+        "location": {
+          "type": "string",
+          "description": "City / country",
+          "optional": true
+        },
+        "linkedin": {
+          "type": "string",
+          "description": "LinkedIn profile LINK - the full URL starting with https:// on linkedin.com, e.g. https://www.linkedin.com/in/jane-doe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "twitter": {
+          "type": "string",
+          "description": "X / Twitter profile LINK - the full URL starting with https:// on x.com or twitter.com, e.g. https://x.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "instagram": {
+          "type": "string",
+          "description": "Instagram profile LINK - the full URL starting with https:// on instagram.com, e.g. https://www.instagram.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "facebook": {
+          "type": "string",
+          "description": "Facebook profile LINK - the full URL starting with https:// on facebook.com or fb.com or fb.me, e.g. https://www.facebook.com/jane.doe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "tiktok": {
+          "type": "string",
+          "description": "TikTok profile LINK - the full URL starting with https:// on tiktok.com, e.g. https://www.tiktok.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "youtube": {
+          "type": "string",
+          "description": "YouTube profile LINK - the full URL starting with https:// on youtube.com or youtu.be, e.g. https://www.youtube.com/@janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "github": {
+          "type": "string",
+          "description": "GitHub profile LINK - the full URL starting with https:// on github.com, e.g. https://github.com/janedoe. NOT the person's name and NOT a handle. Send null if you do not have the URL",
+          "optional": true
+        },
+        "fit": {
+          "type": "string",
+          "description": "How well the lead fits the purpose of the list: high, med or low. Use this field - do not write the fit into notes or title",
+          "optional": true
+        },
+        "status": {
+          "type": "string",
+          "description": "Pipeline stage: new (not contacted), contacted (you wrote, no answer yet), replied (the lead answered), qualified, won, lost",
           "optional": true,
-          "default": "new",
-          "description": "new, contacted, replied, qualified, won, or lost"
+          "default": "new"
         },
         "notes": {
           "type": "string",
-          "optional": true,
-          "description": "Free-form notes"
+          "description": "Free-form notes for facts that have no field of their own",
+          "optional": true
         }
-      },
-      "requires_auth": true
+      }
     },
     {
       "name": "check_lead_links",
@@ -420,7 +631,7 @@
       "name": "list_messages",
       "description": "Read the recorded conversation with a lead, oldest first. Every message has its exact time (occurred_at, epoch ms), platform, direction ('in' from the lead, 'out' to the lead) and full body. Page with offset to read everything",
       "operation": "query",
-      "sql": "SELECT id, lead_id, platform, direction, body, occurred_at, created_at FROM messages WHERE lead_id = :lead_id AND user_id = :__user_id AND (:platform IS NULL OR platform = :platform) ORDER BY occurred_at, created_at LIMIT :limit OFFSET :offset",
+      "sql": "SELECT id, lead_id, platform, direction, body, occurred_at, created_at FROM messages WHERE lead_id = :lead_id AND user_id = :__user_id AND (:platform IS NULL OR platform = :platform) ORDER BY occurred_at, seq, created_at LIMIT :limit OFFSET :offset",
       "params": {
         "lead_id": {
           "type": "string",
@@ -448,10 +659,32 @@
       "requires_auth": true
     },
     {
-      "name": "add_message",
-      "description": "Record one message of a conversation with a lead, with the exact time it happened and the platform it happened on",
+      "name": "add_messages",
       "operation": "execute",
-      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, created_at) SELECT :id, :__user_id, l.id, :platform, :direction, :body, :occurred_at, :__now FROM leads l WHERE l.id = :lead_id AND l.user_id = :__user_id",
+      "requires_auth": true,
+      "description": "Record a whole conversation thread with a lead in ONE call. messages is a JSON array, in the order the messages were sent; array order is kept even when several messages share the same minute. SAFE TO REPEAT - a message already stored for this lead (same direction, same occurred_at, same body) is skipped, so re-sending a thread only adds what is new. \"changes\" is the number of messages stored. If ANY item is malformed (direction not 'in'/'out', empty body, occurred_at not an integer, platform not allowed) NOTHING is stored. Give each message its own real occurred_at - do not stamp a whole thread with one time.",
+      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, seq, created_at) SELECT lower(hex(randomblob(16))), :__user_id, l.id, COALESCE(json_extract(j.value, '$.platform'), :platform), json_extract(j.value, '$.direction'), json_extract(j.value, '$.body'), json_extract(j.value, '$.occurred_at'), (SELECT COUNT(*) FROM messages c WHERE c.lead_id = l.id) + j.key, :__now FROM leads l, json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS j WHERE l.id = :lead_id AND l.user_id = :__user_id AND NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS b WHERE json_extract(b.value, '$.direction') IS NULL OR json_extract(b.value, '$.direction') NOT IN ('in', 'out') OR json_extract(b.value, '$.body') IS NULL OR trim(json_extract(b.value, '$.body')) = '' OR typeof(json_extract(b.value, '$.occurred_at')) <> 'integer' OR COALESCE(json_extract(b.value, '$.platform'), :platform) IS NULL OR COALESCE(json_extract(b.value, '$.platform'), :platform) NOT IN ('LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other')) AND NOT EXISTS (SELECT 1 FROM messages e WHERE e.lead_id = l.id AND e.direction = json_extract(j.value, '$.direction') AND e.occurred_at = json_extract(j.value, '$.occurred_at') AND e.body = json_extract(j.value, '$.body'))",
+      "params": {
+        "lead_id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "platform": {
+          "type": "string",
+          "optional": true,
+          "description": "Where it happened. One of: LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other. Applies to every message that has no platform of its own"
+        },
+        "messages": {
+          "type": "string",
+          "description": "JSON array of messages in sending order, e.g. [{\"direction\":\"out\",\"occurred_at\":1789735980000,\"body\":\"Hi Kai\"},{\"direction\":\"in\",\"occurred_at\":1789880460000,\"body\":\"Tell me more\"}]. direction: 'out' = sent by the user, 'in' = sent by the lead. occurred_at: exact send time, Unix epoch milliseconds (UTC). Optional per-message platform"
+        }
+      }
+    },
+    {
+      "name": "add_message",
+      "description": "Record ONE message of a conversation with a lead. To record a whole thread use add_messages - one call, and safe to repeat. \"changes\": 0 means nothing was saved - unknown lead_id, platform not in the allowed list, direction not 'in' or 'out', or an empty body.",
+      "operation": "execute",
+      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, seq, created_at) SELECT :id, :__user_id, l.id, :platform, :direction, :body, :occurred_at, (SELECT COUNT(*) FROM messages c WHERE c.lead_id = l.id), :__now FROM leads l WHERE l.id = :lead_id AND l.user_id = :__user_id AND :platform IN ('LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other') AND :direction IN ('in', 'out') AND trim(:body) <> ''",
       "params": {
         "id": {
           "type": "string",
@@ -463,7 +696,7 @@
         },
         "platform": {
           "type": "string",
-          "description": "Where it happened, e.g. LinkedIn, Email, X, Instagram, Facebook, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other"
+          "description": "Where it happened. One of: LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other"
         },
         "direction": {
           "type": "string",
@@ -484,7 +717,7 @@
       "name": "update_message",
       "description": "Correct a recorded message",
       "operation": "execute",
-      "sql": "UPDATE messages SET platform = :platform, direction = :direction, body = :body, occurred_at = :occurred_at WHERE id = :id AND user_id = :__user_id",
+      "sql": "UPDATE messages SET platform = :platform, direction = :direction, body = :body, occurred_at = :occurred_at WHERE id = :id AND user_id = :__user_id AND :platform IN ('LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other') AND :direction IN ('in', 'out') AND trim(:body) <> ''",
       "params": {
         "id": {
           "type": "string",
@@ -492,7 +725,7 @@
         },
         "platform": {
           "type": "string",
-          "description": "Where it happened, e.g. LinkedIn, Email, X, Instagram, Facebook, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other"
+          "description": "Where it happened. One of: LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other"
         },
         "direction": {
           "type": "string",

@@ -1,4 +1,7 @@
-export const PLATFORMS = ['LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other'] as const
+export const PLATFORMS = ['LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other'] as const
+
+/** How well a lead fits the purpose of its list. */
+export const FITS = ['high', 'med', 'low'] as const
 
 export const STATUSES = ['new', 'contacted', 'replied', 'qualified', 'won', 'lost'] as const
 
@@ -9,6 +12,8 @@ export interface LeadFields {
   company: string
   /** Where the lead was found (group, community, event) — not their employer. */
   source: string
+  /** Link to the exact post, thread or page where the lead was found. */
+  source_url: string
   email: string
   phone: string
   website: string
@@ -20,6 +25,7 @@ export interface LeadFields {
   tiktok: string
   youtube: string
   github: string
+  fit: string
   status: string
   notes: string
 }
@@ -35,6 +41,8 @@ export type Lead = { [K in keyof LeadFields]: LeadFields[K] | null } & {
   last_message_at: number | null
   /** Time of the lead's most recent message to you (direction 'in'), null when they never replied. */
   last_reply_at: number | null
+  /** When the lead was found (epoch ms) — set by agents, never cleared by the form. */
+  found_at: number | null
   created_at: number
   updated_at: number
 }
@@ -61,5 +69,5 @@ export interface Message {
 }
 
 /** Column a lead table can be sorted by — the `sort` values list_leads accepts. */
-export type SortKey = 'name' | 'email' | 'last_contact' | 'last_reply' | 'status'
+export type SortKey = 'name' | 'email' | 'fit' | 'last_contact' | 'last_reply' | 'status'
 export interface Sort { key: SortKey; dir: 'asc' | 'desc' }

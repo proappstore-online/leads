@@ -30,6 +30,7 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
             {sortable('email', 'Contact')}
             <th className="hidden px-4 py-3 font-semibold md:table-cell">Profiles</th>
             <th className="hidden px-4 py-3 font-semibold lg:table-cell">Lists</th>
+            {sortable('fit', 'Fit')}
             {sortable('last_contact', 'Last contact', 'hidden sm:table-cell')}
             {sortable('last_reply', 'Last reply', 'hidden sm:table-cell')}
             {sortable('status', 'Status')}
@@ -41,7 +42,13 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
               <td className="px-4 py-3">
                 <div className="font-semibold text-[var(--ink)]">{lead.name}</div>
                 <div className="text-xs text-[var(--muted)]">{[lead.title, lead.company].filter(Boolean).join(' · ')}</div>
-                {lead.source && <div className="text-xs text-[var(--muted)]">Found in: {lead.source}</div>}
+                {(lead.source || lead.source_url) && (
+                  <div className="text-xs text-[var(--muted)]" onClick={(e) => e.stopPropagation()}>
+                    Found in: {lead.source_url
+                      ? <a href={lead.source_url} target="_blank" rel="noreferrer" className={linkClass}>{lead.source || 'open post'}</a>
+                      : lead.source}
+                  </div>
+                )}
               </td>
               <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
                 {lead.email && <a href={`mailto:${lead.email}`} className={`block ${linkClass}`}>{lead.email}</a>}
@@ -67,6 +74,7 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
                   ))}
                 </div>
               </td>
+              <td className={`px-4 py-3 text-xs font-semibold capitalize ${lead.fit === 'high' ? 'text-[var(--success)]' : lead.fit === 'low' ? 'text-[var(--muted)]' : 'text-[var(--ink)]'}`}>{lead.fit ?? '—'}</td>
               <td className="hidden px-4 py-3 text-xs text-[var(--muted)] sm:table-cell">
                 {lead.last_message_at ? new Date(lead.last_message_at).toLocaleDateString() : '—'}
               </td>

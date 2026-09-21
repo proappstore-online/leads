@@ -27,6 +27,11 @@ Platform conventions: https://proappstore.online/skills.md
   `occurred_at` — the exact time it was sent, epoch ms (not `created_at`, which is when
   it was logged). Deleted with the lead.
 
+- `leads.fit` (`high`/`med`/`low`), `leads.source` + `leads.source_url` (where the lead was
+  found, in words and as a link), `leads.found_at` (epoch ms). `company` is the lead's employer,
+  never the group they were found in.
+- `messages.seq` keeps thread order when several messages share a timestamp.
+
 Every row carries `user_id`; each signed-in user sees only their own database.
 
 ## Data access
@@ -36,6 +41,19 @@ All reads and writes go through the registered actions in `mcp.json`
 scoped with `user_id = :__user_id` — that guard is the security boundary, keep it on any
 new action. `add_lead_to_list` derives both ids from rows the caller owns rather than
 trusting the params; `add_message` does the same for its lead.
+
+### Validation lives in the action SQL
+
+The platform reports every SQL error as "internal server error" and its migration lint rejects
+triggers, so rules are enforced by making the write match zero rows instead: a refused write
+returns `"changes": 0`. Every lead write checks links-only socials, `status`/`fit` vocabulary and
+no duplicate email / profile URL; message writes check `platform`/`direction`. The descriptions
+tell agents what `changes: 0` means and which tool explains it (`check_lead_links`, `find_lead`).
+Params are bound once through a `FROM (SELECT :x AS x, …) AS p` subquery — D1 allows 100 binds.
+
+Agent-facing conventions live in the `how_to_use` action — update it when a rule changes.
+`update_lead` is a full replace for the form; agents use `enrich_lead` / `set_lead_status`.
+`add_messages` takes a JSON thread, is all-or-nothing, and skips messages already stored.
 
 Schema changes: add a new entry to `migrations.json` (additive only, never edit an
 applied one), and keep `mcp.json` columns in step with it.
