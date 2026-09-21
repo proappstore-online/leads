@@ -33,6 +33,8 @@ export type Lead = { [K in keyof LeadFields]: LeadFields[K] | null } & {
   list_ids: string | null
   /** Time of the most recent recorded message (epoch ms), null when none. */
   last_message_at: number | null
+  /** Time of the lead's most recent message to you (direction 'in'), null when they never replied. */
+  last_reply_at: number | null
   created_at: number
   updated_at: number
 }
@@ -59,5 +61,5 @@ export interface Message {
 }
 
 /** Column a lead table can be sorted by — the `sort` values list_leads accepts. */
-export type SortKey = 'name' | 'email' | 'last_contact' | 'status'
+export type SortKey = 'name' | 'email' | 'last_contact' | 'last_reply' | 'status'
 export interface Sort { key: SortKey; dir: 'asc' | 'desc' }

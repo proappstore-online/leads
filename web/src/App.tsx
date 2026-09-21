@@ -72,11 +72,11 @@ function Home() {
     return () => clearTimeout(timer)
   }, [loadLeads])
 
-  // Same column flips direction; a new column starts ascending, except last contact (most recent first).
+  // Same column flips direction; a new column starts ascending, except the date columns (most recent first).
   function toggleSort(key: SortKey) {
     setSort((prev) => prev.key === key
       ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-      : { key, dir: key === 'last_contact' ? 'desc' : 'asc' })
+      : { key, dir: key === 'last_contact' || key === 'last_reply' ? 'desc' : 'asc' })
   }
 
   function refresh() {

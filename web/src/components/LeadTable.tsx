@@ -31,6 +31,7 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
             <th className="hidden px-4 py-3 font-semibold md:table-cell">Profiles</th>
             <th className="hidden px-4 py-3 font-semibold lg:table-cell">Lists</th>
             {sortable('last_contact', 'Last contact', 'hidden sm:table-cell')}
+            {sortable('last_reply', 'Last reply', 'hidden sm:table-cell')}
             {sortable('status', 'Status')}
           </tr>
         </thead>
@@ -64,6 +65,9 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
               </td>
               <td className="hidden px-4 py-3 text-xs text-[var(--muted)] sm:table-cell">
                 {lead.last_message_at ? new Date(lead.last_message_at).toLocaleDateString() : '—'}
+              </td>
+              <td className="hidden px-4 py-3 text-xs text-[var(--muted)] sm:table-cell">
+                {lead.last_reply_at ? new Date(lead.last_reply_at).toLocaleDateString() : '—'}
               </td>
               <td className="px-4 py-3 text-xs font-semibold capitalize text-[var(--muted)]">{lead.status}</td>
             </tr>
