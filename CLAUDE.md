@@ -52,6 +52,8 @@ tell agents what `changes: 0` means and which tool explains it (`check_lead_link
 Params are bound once through a `FROM (SELECT :x AS x, …) AS p` subquery — D1 allows 100 binds.
 
 Agent-facing conventions live in the `how_to_use` action — update it when a rule changes.
+Every action must bind at least one param (hence its `WHERE :__user_id IS NOT NULL`): the data
+worker calls `.bind()` even with none, which D1 answers with a 500.
 `update_lead` is a full replace for the form; agents use `enrich_lead` / `set_lead_status`.
 `add_messages` takes a JSON thread, is all-or-nothing, and skips messages already stored.
 
