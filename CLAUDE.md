@@ -15,6 +15,8 @@ Platform conventions: https://proappstore.online/skills.md
 - `leads` — one row per contact. Social profiles (`linkedin`, `twitter`, `instagram`,
   `facebook`, `tiktok`, `youtube`, `github`) are stored as typed: a full URL or a bare
   handle. `web/src/lib/socials.ts` turns either into a link.
+  `source` is where the lead was found (a Facebook group, a community, an event) — not
+  their employer, which is `company`.
 - `lists` — a named category of leads with a `purpose`.
 - `lead_lists` — many-to-many membership. Deleting a list never deletes its leads.
 - `messages` — the recorded conversation with a lead, one row per message: `platform`,

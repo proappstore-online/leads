@@ -25,6 +25,7 @@ export function LeadTable({ leads, lists, onOpen }: { leads: Lead[]; lists: Lead
               <td className="px-4 py-3">
                 <div className="font-semibold text-[var(--ink)]">{lead.name}</div>
                 <div className="text-xs text-[var(--muted)]">{[lead.title, lead.company].filter(Boolean).join(' · ')}</div>
+                {lead.source && <div className="text-xs text-[var(--muted)]">Found in: {lead.source}</div>}
               </td>
               <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
                 {lead.email && <a href={`mailto:${lead.email}`} className={`block ${linkClass}`}>{lead.email}</a>}

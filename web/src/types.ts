@@ -7,6 +7,8 @@ export interface LeadFields {
   name: string
   title: string
   company: string
+  /** Where the lead was found (group, community, event) — not their employer. */
+  source: string
   email: string
   phone: string
   website: string

@@ -7,6 +7,10 @@
     {
       "name": "0002_messages",
       "sql": "CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, lead_id TEXT NOT NULL, platform TEXT NOT NULL, direction TEXT NOT NULL DEFAULT 'out', body TEXT NOT NULL, occurred_at INTEGER NOT NULL, created_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS idx_messages_lead_time ON messages (lead_id, occurred_at)"
+    },
+    {
+      "name": "0003_lead_source",
+      "sql": "ALTER TABLE leads ADD COLUMN source TEXT"
     }
   ]
 }

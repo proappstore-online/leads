@@ -10,6 +10,7 @@ import { inputClass } from './styles'
 const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholder?: string }[] = [
   { key: 'title', label: 'Title / role', placeholder: 'Head of Partnerships' },
   { key: 'company', label: 'Company' },
+  { key: 'source', label: 'Found in', placeholder: 'Facebook group: Jobs in Melbourne' },
   { key: 'email', label: 'Email', type: 'email' },
   { key: 'phone', label: 'Phone', type: 'tel' },
   { key: 'website', label: 'Website', placeholder: 'example.com' },
@@ -17,7 +18,7 @@ const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholde
 ]
 
 const EMPTY: LeadFields = {
-  name: '', title: '', company: '', email: '', phone: '', website: '', location: '',
+  name: '', title: '', company: '', source: '', email: '', phone: '', website: '', location: '',
   linkedin: '', twitter: '', instagram: '', facebook: '', tiktok: '', youtube: '', github: '',
   status: 'new', notes: '',
 }
