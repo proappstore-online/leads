@@ -1,22 +1,37 @@
 import { SOCIALS, profileUrl } from '../lib/socials'
-import type { Lead, LeadList } from '../types'
+import type { Lead, LeadList, Sort, SortKey } from '../types'
 
 const linkClass = 'text-[var(--sky-deep)] underline-offset-4 hover:underline'
 
-export function LeadTable({ leads, lists, onOpen }: { leads: Lead[]; lists: LeadList[]; onOpen: (lead: Lead) => void }) {
+export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
+  leads: Lead[]
+  lists: LeadList[]
+  sort: Sort
+  onSort: (key: SortKey) => void
+  onOpen: (lead: Lead) => void
+}) {
   const listNames = new Map(lists.map((l) => [l.id, l.name]))
+
+  const sortable = (key: SortKey, label: string, className = '') => (
+    <th aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined} className={`px-4 py-3 font-semibold ${className}`}>
+      <button type="button" aria-label={`Sort by ${label}`} onClick={() => onSort(key)} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-[var(--ink)]">
+        {label}
+        <span aria-hidden="true" className={sort.key === key ? 'text-[var(--accent)]' : 'opacity-30'}>{sort.key === key && sort.dir === 'desc' ? '↓' : '↑'}</span>
+      </button>
+    </th>
+  )
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)]">
       <table className="w-full select-text text-left text-sm">
         <thead className="text-xs uppercase tracking-wider text-[var(--muted)]">
           <tr className="border-b border-[var(--line)]">
-            <th className="px-4 py-3 font-semibold">Name</th>
-            <th className="px-4 py-3 font-semibold">Contact</th>
+            {sortable('name', 'Name')}
+            {sortable('email', 'Contact')}
             <th className="hidden px-4 py-3 font-semibold md:table-cell">Profiles</th>
             <th className="hidden px-4 py-3 font-semibold lg:table-cell">Lists</th>
-            <th className="hidden px-4 py-3 font-semibold sm:table-cell">Last contact</th>
-            <th className="px-4 py-3 font-semibold">Status</th>
+            {sortable('last_contact', 'Last contact', 'hidden sm:table-cell')}
+            {sortable('status', 'Status')}
           </tr>
         </thead>
         <tbody>

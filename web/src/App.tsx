@@ -3,7 +3,7 @@ import { ProShell } from '@proappstore/sdk'
 import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { q } from './lib/actions'
-import { STATUSES, type Lead, type LeadList } from './types'
+import { STATUSES, type Lead, type LeadList, type Sort, type SortKey } from './types'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
@@ -33,6 +33,7 @@ function Home() {
   const [listId, setListId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [sort, setSort] = useState<Sort>({ key: 'name', dir: 'asc' })
   const [editingLead, setEditingLead] = useState<Lead | 'new' | null>(null)
   const [editingList, setEditingList] = useState<LeadList | 'new' | null>(null)
   const request = useRef(0)
@@ -51,7 +52,7 @@ function Home() {
     const id = ++request.current
     setLoading(true)
     try {
-      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, q: search.trim() || null, limit: PAGE, offset })
+      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
       setHasMore(rows.length === PAGE)
@@ -61,7 +62,7 @@ function Home() {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [listId, status, search])
+  }, [listId, status, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
 
@@ -70,6 +71,13 @@ function Home() {
     const timer = setTimeout(() => loadLeads(0), 250)
     return () => clearTimeout(timer)
   }, [loadLeads])
+
+  // Same column flips direction; a new column starts ascending, except last contact (most recent first).
+  function toggleSort(key: SortKey) {
+    setSort((prev) => prev.key === key
+      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: key === 'last_contact' ? 'desc' : 'asc' })
+  }
 
   function refresh() {
     loadLists()
@@ -134,7 +142,7 @@ function Home() {
 
         <div className="mt-4">
           {leads.length > 0 ? (
-            <LeadTable leads={leads} lists={lists} onOpen={setEditingLead} />
+            <LeadTable leads={leads} lists={lists} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
               {loading ? 'Loading…' : search || status ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}

@@ -57,3 +57,7 @@ export interface Message {
   occurred_at: number
   created_at: number
 }
+
+/** Column a lead table can be sorted by — the `sort` values list_leads accepts. */
+export type SortKey = 'name' | 'email' | 'last_contact' | 'status'
+export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
