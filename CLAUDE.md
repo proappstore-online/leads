@@ -27,9 +27,13 @@ Platform conventions: https://proappstore.online/skills.md
   `occurred_at` — the exact time it was sent, epoch ms (not `created_at`, which is when
   it was logged). Deleted with the lead.
 
-- `leads.fit` (`high`/`med`/`low`), `leads.source` + `leads.source_url` (where the lead was
-  found, in words and as a link), `leads.found_at` (epoch ms). `company` is the lead's employer,
-  never the group they were found in.
+- `sources` — places leads are found (Facebook group/page, event…): `name` (unique per user,
+  case-insensitive), `kind` (fixed list), `url`, `notes`. `leads.source_id` points to one; a lead
+  has one source, the place first found. `list_sources` returns per-source stats (leads,
+  contacted, replied, reply rate, qualified, won, high fit). `leads.source` is the legacy free
+  text from before 0006 — no action writes it; the UI shows it only while `source_id` is empty.
+- `leads.fit` (`high`/`med`/`low`), `leads.source_url` (link to the exact post the lead was
+  found in), `leads.found_at` (epoch ms). `company` is the lead's employer, never the group.
 - `leads.needs_attention` (0/1) + `attention_reason` + `attention_at` — a flag for the owner,
   raised by agents (`flag_needs_attention`) or by hand, separate from `status`. Flagged leads are
   always listed first by `list_leads`, highlighted in the table, and have their own sidebar view.

@@ -3,10 +3,12 @@ import { ProShell } from '@proappstore/sdk'
 import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { q } from './lib/actions'
-import { FITS, STATUSES, type Lead, type LeadList, type Sort, type SortKey } from './types'
+import { FITS, STATUSES, type Lead, type LeadList, type Sort, type SortKey, type Source, type SourceSort } from './types'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
+import { SourceForm } from './components/SourceForm'
+import { SourcesTable } from './components/SourcesTable'
 import { SignIn } from './components/SignIn'
 
 const PAGE = 200
@@ -28,6 +30,13 @@ function Home() {
   const [total, setTotal] = useState(0)
   const [attentionCount, setAttentionCount] = useState(0)
   const [attentionOnly, setAttentionOnly] = useState(false)
+  const [view, setView] = useState<'leads' | 'sources'>('leads')
+  const [sources, setSources] = useState<Source[]>([])
+  const [noSource, setNoSource] = useState(0)
+  const [sourceSort, setSourceSort] = useState<SourceSort>('leads')
+  /** '' = any source, 'none' = leads without one, otherwise a source id. */
+  const [sourceId, setSourceId] = useState('')
+  const [editingSource, setEditingSource] = useState<Source | 'new' | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -43,20 +52,29 @@ function Home() {
 
   const loadLists = useCallback(async () => {
     try {
-      const [rows, count] = await Promise.all([q<LeadList>('list_lists'), q<{ total: number; needs_attention: number }>('count_leads')])
+      const [rows, count] = await Promise.all([q<LeadList>('list_lists'), q<{ total: number; needs_attention: number; no_source: number }>('count_leads')])
       setLists(rows)
       setTotal(count[0]?.total ?? 0)
       setAttentionCount(count[0]?.needs_attention ?? 0)
+      setNoSource(count[0]?.no_source ?? 0)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }, [])
 
+  const loadSources = useCallback(async () => {
+    try {
+      setSources(await q<Source>('list_sources', { sort: sourceSort }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [sourceSort])
+
   const loadLeads = useCallback(async (offset: number) => {
     const id = ++request.current
     setLoading(true)
     try {
-      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, fit: fit || null, needs_attention: attentionOnly || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
+      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, fit: fit || null, needs_attention: attentionOnly || null, source_id: sourceId || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
       setHasMore(rows.length === PAGE)
@@ -66,9 +84,10 @@ function Home() {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [listId, status, fit, attentionOnly, search, sort])
+  }, [listId, status, fit, attentionOnly, sourceId, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
+  useEffect(() => { loadSources() }, [loadSources])
 
   // Debounced so typing in the search box doesn't fire a request per keystroke.
   useEffect(() => {
@@ -85,6 +104,7 @@ function Home() {
 
   function refresh() {
     loadLists()
+    loadSources()
     loadLeads(0)
   }
 
@@ -95,23 +115,58 @@ function Home() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
       <nav aria-label="Lead lists" className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
-        <button type="button" onClick={() => { setListId(null); setAttentionOnly(false) }} className={chip(listId === null && !attentionOnly)}>
+        <button type="button" onClick={() => { setView('leads'); setListId(null); setAttentionOnly(false); setSourceId('') }} className={chip(view === 'leads' && listId === null && !attentionOnly)}>
           <span>All leads</span>
           <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
         </button>
-        <button type="button" onClick={() => { setListId(null); setAttentionOnly(true) }} className={chip(attentionOnly)}>
+        <button type="button" onClick={() => { setView('leads'); setListId(null); setAttentionOnly(true) }} className={chip(view === 'leads' && attentionOnly)}>
           <span className={attentionCount > 0 ? 'text-[var(--warning)]' : undefined}>Needs attention</span>
           <span className={`rounded-full px-2 text-xs font-bold ${attentionCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{attentionCount}</span>
         </button>
         {lists.map((list) => (
-          <button key={list.id} type="button" onClick={() => { setListId(list.id); setAttentionOnly(false) }} title={list.purpose ?? undefined} className={chip(listId === list.id)}>
+          <button key={list.id} type="button" onClick={() => { setView('leads'); setListId(list.id); setAttentionOnly(false) }} title={list.purpose ?? undefined} className={chip(view === 'leads' && listId === list.id)}>
             <span className="truncate">{list.name}</span>
             <span className="text-xs font-medium text-[var(--muted)]">{list.lead_count}</span>
           </button>
         ))}
         <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New list</button>
+        <div className="hidden border-t border-[var(--line)] lg:my-2 lg:block" />
+        <button type="button" onClick={() => setView('sources')} className={chip(view === 'sources')}>
+          <span>Sources</span>
+          <span className="text-xs font-medium text-[var(--muted)]">{sources.length}</span>
+        </button>
       </nav>
 
+      {view === 'sources' ? (
+      <main className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="display-font text-2xl font-bold text-[var(--ink)]">Sources</h1>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">Where leads are found and how each place performs. Click a source to see its leads.</p>
+          </div>
+          <div className="flex gap-2">
+            <select aria-label="Sort sources" value={sourceSort} onChange={(e) => setSourceSort(e.target.value as SourceSort)} className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-sm text-[var(--ink)] outline-none">
+              <option value="leads">Most leads</option>
+              <option value="reply_rate">Best reply rate</option>
+              <option value="won">Most won</option>
+              <option value="high_fit">Most high fit</option>
+              <option value="last_found">Recently found</option>
+              <option value="name">Name</option>
+            </select>
+            <button type="button" onClick={() => setEditingSource('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)]">Add source</button>
+          </div>
+        </div>
+        {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
+        <div className="mt-4">
+          <SourcesTable
+            sources={sources}
+            noSource={noSource}
+            onOpen={(id) => { setView('leads'); setListId(null); setAttentionOnly(false); setSourceId(id) }}
+            onEdit={setEditingSource}
+          />
+        </div>
+      </main>
+      ) : (
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
@@ -132,7 +187,7 @@ function Home() {
             aria-label="Search leads"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, company, source, title, email, phone"
+            placeholder="Search name, company, title, email, phone, source"
             className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
           />
           <select
@@ -153,6 +208,16 @@ function Home() {
             <option value="">Any fit</option>
             {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
+          <select
+            aria-label="Filter by source"
+            value={sourceId}
+            onChange={(e) => setSourceId(e.target.value)}
+            className="max-w-48 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+          >
+            <option value="">Any source</option>
+            <option value="none">No source</option>
+            {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
         </div>
 
         {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
@@ -162,7 +227,7 @@ function Home() {
             <LeadTable leads={leads} lists={lists} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
-              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : search || status || fit ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}
+              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : search || status || fit || sourceId ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}
             </p>
           )}
           {hasMore && (
@@ -173,14 +238,23 @@ function Home() {
         </div>
         <a href="https://proappstore.online" className="mt-6 inline-block text-xs font-semibold text-[var(--muted)] underline-offset-4 hover:underline">Built for ProAppStore</a>
       </main>
+      )}
 
       {editingLead && (
         <LeadForm
           lead={editingLead === 'new' ? null : editingLead}
           lists={lists}
+          sources={sources}
           defaultListId={listId}
           onClose={() => setEditingLead(null)}
           onSaved={() => { setEditingLead(null); refresh() }}
+        />
+      )}
+      {editingSource && (
+        <SourceForm
+          source={editingSource === 'new' ? null : editingSource}
+          onClose={() => setEditingSource(null)}
+          onSaved={() => { setEditingSource(null); refresh() }}
         />
       )}
       {editingList && (

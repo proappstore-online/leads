@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { x } from '../lib/actions'
 import { SOCIALS, isProfileLink } from '../lib/socials'
-import { FITS, STATUSES, type Lead, type LeadFields, type LeadList } from '../types'
+import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Source } from '../types'
 import { Conversation } from './Conversation'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
@@ -10,8 +10,6 @@ import { inputClass } from './styles'
 const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholder?: string }[] = [
   { key: 'title', label: 'Title / role', placeholder: 'Head of Partnerships' },
   { key: 'company', label: 'Company' },
-  { key: 'source', label: 'Found in', placeholder: 'Facebook group: Jobs in Melbourne' },
-  { key: 'source_url', label: 'Found-in link', placeholder: 'https://www.facebook.com/groups/…/posts/…' },
   { key: 'email', label: 'Email', type: 'email' },
   { key: 'phone', label: 'Phone', type: 'tel' },
   { key: 'website', label: 'Website', placeholder: 'example.com' },
@@ -19,7 +17,7 @@ const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholde
 ]
 
 const EMPTY: LeadFields = {
-  name: '', title: '', company: '', source: '', source_url: '', email: '', phone: '', website: '', location: '',
+  name: '', title: '', company: '', source_id: '', source_url: '', email: '', phone: '', website: '', location: '',
   linkedin: '', twitter: '', instagram: '', facebook: '', tiktok: '', youtube: '', github: '',
   fit: '', status: 'new', notes: '',
 }
@@ -30,9 +28,10 @@ function toFields(lead: Lead): LeadFields {
   return fields
 }
 
-export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
+export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved }: {
   lead: Lead | null
   lists: LeadList[]
+  sources: Source[]
   /** List being browsed when "Add lead" was pressed — preselected for new leads. */
   defaultListId: string | null
   onClose: () => void
@@ -88,7 +87,7 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
     run(async () => {
       const { changes } = await x(lead ? 'update_lead' : 'create_lead', params)
       // The actions refuse the whole write on a non-link social field or a duplicate email / profile link.
-      if (changes === 0) throw new Error('Not saved. Either a link is not a full https:// link, or another lead already has this email or profile link.')
+      if (changes === 0) throw new Error('Not saved. Either a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.')
       await Promise.all([
         ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id })),
         ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id })),
@@ -141,6 +140,18 @@ export function LeadForm({ lead, lists, defaultListId, onClose, onSaved }: {
           <label className="block sm:col-span-2">
             <span className="text-sm font-medium text-[var(--ink)]">Name</span>
             <input type="text" value={fields.name} onChange={(e) => set('name', e.target.value)} required autoFocus className={inputClass} />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-[var(--ink)]">Found in</span>
+            <select value={fields.source_id} onChange={(e) => set('source_id', e.target.value)} className={inputClass}>
+              <option value="">No source</option>
+              {sources.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.kind})</option>)}
+            </select>
+            {!fields.source_id && lead?.source && <span className="mt-1 block text-xs text-[var(--muted)]">Previously noted: {lead.source}</span>}
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-[var(--ink)]">Found-in post link</span>
+            <input type="text" inputMode="url" value={fields.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://www.facebook.com/groups/…/posts/…" className={inputClass} />
           </label>
           {CONTACT.map(({ key, label, type, placeholder }) => (
             <label key={key} className="block">

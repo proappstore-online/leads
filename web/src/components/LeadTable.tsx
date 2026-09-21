@@ -46,11 +46,13 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
                 </div>
                 {lead.needs_attention && lead.attention_reason ? <div className="text-xs font-medium text-[var(--warning)]">{lead.attention_reason}</div> : null}
                 <div className="text-xs text-[var(--muted)]">{[lead.title, lead.company].filter(Boolean).join(' · ')}</div>
-                {(lead.source || lead.source_url) && (
+                {(lead.source_name || lead.source || lead.source_url) && (
                   <div className="text-xs text-[var(--muted)]" onClick={(e) => e.stopPropagation()}>
-                    Found in: {lead.source_url
-                      ? <a href={lead.source_url} target="_blank" rel="noreferrer" className={linkClass}>{lead.source || 'open post'}</a>
-                      : lead.source}
+                    Found in:{' '}
+                    {lead.source_name
+                      ? (lead.source_link ? <a href={lead.source_link} target="_blank" rel="noreferrer" className={linkClass}>{lead.source_name}</a> : lead.source_name)
+                      : lead.source ?? 'unknown'}
+                    {lead.source_url && <> · <a href={lead.source_url} target="_blank" rel="noreferrer" className={linkClass}>post</a></>}
                   </div>
                 )}
               </td>
