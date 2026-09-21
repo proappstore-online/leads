@@ -7,6 +7,7 @@ import { FITS, STATUSES, type Lead, type LeadList, type Sort, type SortKey, type
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
+import { SourceDetails } from './components/SourceDetails'
 import { SourceForm } from './components/SourceForm'
 import { SourcesTable } from './components/SourcesTable'
 import { SignIn } from './components/SignIn'
@@ -37,6 +38,9 @@ function Home() {
   /** '' = any source, 'none' = leads without one, otherwise a source id. */
   const [sourceId, setSourceId] = useState('')
   const [editingSource, setEditingSource] = useState<Source | 'new' | null>(null)
+  const [viewingSourceId, setViewingSourceId] = useState<string | null>(null)
+  /** Bumped on every refresh so an open source panel reloads after edits. */
+  const [version, setVersion] = useState(0)
   const [leads, setLeads] = useState<Lead[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -102,7 +106,16 @@ function Home() {
       : { key, dir: key === 'last_contact' || key === 'last_reply' ? 'desc' : 'asc' })
   }
 
+  function showSourceLeads(id: string) {
+    setViewingSourceId(null)
+    setView('leads')
+    setListId(null)
+    setAttentionOnly(false)
+    setSourceId(id)
+  }
+
   function refresh() {
+    setVersion((v) => v + 1)
     loadLists()
     loadSources()
     loadLeads(0)
@@ -142,7 +155,7 @@ function Home() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="display-font text-2xl font-bold text-[var(--ink)]">Sources</h1>
-            <p className="mt-0.5 text-sm text-[var(--muted)]">Where leads are found and how each place performs. Click a source to see its leads.</p>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">Where leads are found and how each place performs. Click a source for its details and leads.</p>
           </div>
           <div className="flex gap-2">
             <select aria-label="Sort sources" value={sourceSort} onChange={(e) => setSourceSort(e.target.value as SourceSort)} className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-sm text-[var(--ink)] outline-none">
@@ -161,7 +174,7 @@ function Home() {
           <SourcesTable
             sources={sources}
             noSource={noSource}
-            onOpen={(id) => { setView('leads'); setListId(null); setAttentionOnly(false); setSourceId(id) }}
+            onOpen={(id) => { if (id === 'none') showSourceLeads('none'); else setViewingSourceId(id) }}
             onEdit={setEditingSource}
           />
         </div>
@@ -240,6 +253,16 @@ function Home() {
       </main>
       )}
 
+      {viewingSourceId && (
+        <SourceDetails
+          sourceId={viewingSourceId}
+          version={version}
+          onClose={() => setViewingSourceId(null)}
+          onEdit={setEditingSource}
+          onOpenLead={setEditingLead}
+          onShowLeads={() => showSourceLeads(viewingSourceId)}
+        />
+      )}
       {editingLead && (
         <LeadForm
           lead={editingLead === 'new' ? null : editingLead}
@@ -255,6 +278,7 @@ function Home() {
           source={editingSource === 'new' ? null : editingSource}
           onClose={() => setEditingSource(null)}
           onSaved={() => { setEditingSource(null); refresh() }}
+          onDeleted={() => setViewingSourceId(null)}
         />
       )}
       {editingList && (

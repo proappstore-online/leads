@@ -107,3 +107,15 @@ export interface Source {
 }
 
 export type SourceSort = 'leads' | 'reply_rate' | 'won' | 'high_fit' | 'last_found' | 'name'
+
+/** One source in full, as get_source returns it. */
+export interface SourceDetail extends Source {
+  status_new: number
+  status_contacted: number
+  status_replied: number
+  status_qualified: number
+  status_won: number
+  status_lost: number
+  first_found_at: number | null
+  last_contact_at: number | null
+}

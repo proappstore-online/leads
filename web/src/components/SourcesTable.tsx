@@ -2,7 +2,7 @@ import type { Source } from '../types'
 
 const linkClass = 'text-[var(--sky-deep)] underline-offset-4 hover:underline'
 
-/** Per-source performance. Clicking a row shows that source's leads. */
+/** Per-source performance. Clicking a row opens the source; the No source row lists leads without one. */
 export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
   sources: Source[]
   /** Leads that have no source — shown as a final row so the counts add up to the total. */

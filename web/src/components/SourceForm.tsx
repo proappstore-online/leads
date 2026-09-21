@@ -4,10 +4,11 @@ import { SOURCE_KINDS, type Source } from '../types'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
 
-export function SourceForm({ source, onClose, onSaved }: {
+export function SourceForm({ source, onClose, onSaved, onDeleted }: {
   source: Source | null
   onClose: () => void
   onSaved: () => void
+  onDeleted: () => void
 }) {
   const [name, setName] = useState(source?.name ?? '')
   const [kind, setKind] = useState(source?.kind ?? 'Facebook group')
@@ -45,7 +46,7 @@ export function SourceForm({ source, onClose, onSaved }: {
 
   function remove() {
     if (!source || !confirm(`Delete the source "${source.name}"? Its ${source.leads} leads stay, with no source.`)) return
-    run(() => x('delete_source', { id: source.id }).then(() => undefined))
+    run(() => x('delete_source', { id: source.id }).then(onDeleted))
   }
 
   return (
