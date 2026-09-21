@@ -10,6 +10,7 @@ import { ListForm } from './components/ListForm'
 import { SourceDetails } from './components/SourceDetails'
 import { SourceForm } from './components/SourceForm'
 import { SourcesTable } from './components/SourcesTable'
+import { StatsPage } from './components/StatsPage'
 import { SignIn } from './components/SignIn'
 
 const PAGE = 200
@@ -31,7 +32,7 @@ function Home() {
   const [total, setTotal] = useState(0)
   const [attentionCount, setAttentionCount] = useState(0)
   const [attentionOnly, setAttentionOnly] = useState(false)
-  const [view, setView] = useState<'leads' | 'sources'>('leads')
+  const [view, setView] = useState<'leads' | 'sources' | 'stats'>('leads')
   const [sources, setSources] = useState<Source[]>([])
   const [noSource, setNoSource] = useState(0)
   const [sourceSort, setSourceSort] = useState<SourceSort>('leads')
@@ -106,6 +107,16 @@ function Home() {
       : { key, dir: key === 'last_contact' || key === 'last_reply' ? 'desc' : 'asc' })
   }
 
+  async function openLeadById(id: string) {
+    try {
+      const [lead] = await q<Lead>('get_lead', { id })
+      if (lead) setEditingLead(lead)
+      else setError('That lead no longer exists.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   function showSourceLeads(id: string) {
     setViewingSourceId(null)
     setView('leads')
@@ -144,13 +155,18 @@ function Home() {
         ))}
         <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New list</button>
         <div className="hidden border-t border-[var(--line)] lg:my-2 lg:block" />
+        <button type="button" onClick={() => setView('stats')} className={chip(view === 'stats')}>
+          <span>Stats</span>
+        </button>
         <button type="button" onClick={() => setView('sources')} className={chip(view === 'sources')}>
           <span>Sources</span>
           <span className="text-xs font-medium text-[var(--muted)]">{sources.length}</span>
         </button>
       </nav>
 
-      {view === 'sources' ? (
+      {view === 'stats' ? (
+        <StatsPage lists={lists} sources={sources} onOpenLead={openLeadById} />
+      ) : view === 'sources' ? (
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">

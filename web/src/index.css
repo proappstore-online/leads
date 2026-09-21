@@ -57,6 +57,10 @@
   --radius: 0.75rem;
   --radius-sm: 0.5rem;
   --shadow: var(--shadow-card);
+
+  /* Chart series - validated pair (CVD + contrast) for light surfaces. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
 }
 
 :root[data-theme='dark'] {
@@ -101,6 +105,8 @@
   --bg-blob-2: rgba(137, 203, 229, 0.05);
   --shadow-soft: 0 28px 70px rgba(0, 0, 0, 0.6);
   --shadow-card: 0 12px 28px rgba(0, 0, 0, 0.4);
+  --series-1: #3987e5;
+  --series-2: #d95926;
 }
 
 html {
