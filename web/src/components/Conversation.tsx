@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { q, x } from '../lib/actions'
 import { PLATFORMS, type Lead, type Message } from '../types'
 import { inputClass } from './styles'
@@ -53,12 +53,16 @@ export function Conversation({ lead, onChanged, readOnlyHistory = false }: { lea
     }
   }
 
+  const formRef = useRef<HTMLFormElement>(null)
+
   function startEdit(message: Message) {
     setEditing(message)
     setPlatform(message.platform)
     setDirection(message.direction)
     setOccurredAt(toInputValue(message.occurred_at))
     setBody(message.body)
+    // The form sits below the thread - on a phone it is off screen.
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   function save(e: React.FormEvent) {
@@ -95,14 +99,14 @@ export function Conversation({ lead, onChanged, readOnlyHistory = false }: { lea
         <ol className="select-text space-y-3">
           {messages.map((m) => (
             <li key={m.id} className={`flex flex-col ${m.direction === 'out' ? 'items-end' : 'items-start'}`}>
-              <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm text-[var(--ink)] ${m.direction === 'out' ? 'bg-[var(--accent-soft)]' : 'border border-[var(--line)] bg-[var(--glass)]'}`}>
+              <div className={`max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl px-4 py-2.5 text-sm text-[var(--ink)] ${m.direction === 'out' ? 'bg-[var(--accent-soft)]' : 'border border-[var(--line)] bg-[var(--glass)]'}`}>
                 {m.body}
               </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-[var(--muted)]">
+              <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-[var(--muted)]">
                 <span>{m.direction === 'out' ? 'You' : lead.name} · {m.platform} · <time dateTime={new Date(m.occurred_at).toISOString()}>{new Date(m.occurred_at).toLocaleString()}</time></span>
                 {!readOnlyHistory && <>
-                  <button type="button" onClick={() => startEdit(m)} className="font-semibold hover:text-[var(--ink)]">Edit</button>
-                  <button type="button" onClick={() => remove(m)} className="font-semibold hover:text-[var(--error)]">Delete</button>
+                  <button type="button" onClick={() => startEdit(m)} className="rounded-lg px-2 py-1.5 font-semibold hover:bg-[var(--line)] hover:text-[var(--ink)]">Edit</button>
+                  <button type="button" onClick={() => remove(m)} className="rounded-lg px-2 py-1.5 font-semibold hover:bg-[var(--line)] hover:text-[var(--error)]">Delete</button>
                 </>}
               </div>
             </li>
@@ -113,7 +117,7 @@ export function Conversation({ lead, onChanged, readOnlyHistory = false }: { lea
         <button type="button" onClick={() => load(messages.length)} disabled={loading} className="w-full rounded-xl border border-[var(--line-strong)] py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-60">Load later messages</button>
       )}
 
-      <form onSubmit={save} className="space-y-3 border-t border-[var(--line)] pt-4">
+      <form ref={formRef} onSubmit={save} className="space-y-3 border-t border-[var(--line)] pt-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className="block">
             <span className="text-sm font-medium text-[var(--ink)]">Platform</span>

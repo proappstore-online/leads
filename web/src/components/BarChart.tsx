@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export interface Series {
   name: string
@@ -7,7 +7,6 @@ export interface Series {
   values: number[]
 }
 
-const W = 600
 const PAD = { top: 8, right: 4, bottom: 22, left: 30 }
 
 /** Bar with rounded top corners, anchored flat on the baseline. */
@@ -26,6 +25,14 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
   height?: number
 }) {
   const [hover, setHover] = useState<number | null>(null)
+  // Drawn at the container's real width, so labels keep their size on a phone instead of shrinking with the chart.
+  const box = useRef<HTMLDivElement>(null)
+  const [W, setW] = useState(600)
+  useEffect(() => {
+    const observer = new ResizeObserver(([entry]) => setW(Math.max(240, Math.round(entry.contentRect.width))))
+    observer.observe(box.current!)
+    return () => observer.disconnect()
+  }, [])
   const n = labels.length
   const plotW = W - PAD.left - PAD.right
   const plotH = height - PAD.top - PAD.bottom
@@ -38,7 +45,8 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
   const barW = Math.max(2, Math.min(18, (groupW * 0.8 - gap * (series.length - 1)) / series.length))
   const groupBarsW = barW * series.length + gap * (series.length - 1)
   const y = (v: number) => PAD.top + plotH - (v / top) * plotH
-  const every = Math.ceil(n / 8)
+  // As many date labels as fit, about one per 56px.
+  const every = Math.ceil(n / Math.max(2, Math.floor(plotW / 56)))
   // The current bucket's label always shows; drop a regular label that would crowd it.
   const showLabel = (i: number) => i === current || (i % every === 0 && (current === undefined || Math.abs(current - i) >= every))
   const totals = series.map((s) => s.values.reduce((a, b) => a + b, 0))
@@ -61,7 +69,7 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
         )}
       </figcaption>
 
-      <div className="relative mt-2">
+      <div ref={box} className="relative mt-2">
         <svg viewBox={`0 0 ${W} ${height}`} className="block w-full" role="img" aria-label={`${title}: ${series.map((s, i) => `${s.name} ${totals[i]}`).join(', ')}`} onMouseLeave={() => setHover(null)}>
           {ticks.map((t) => (
             <g key={t}>
@@ -95,7 +103,7 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
                   </text>
                 )}
                 {/* Hit target: the whole column, not just the bar. */}
-                <rect x={PAD.left + i * groupW} y={PAD.top} width={groupW} height={plotH} fill="transparent" onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} />
+                <rect x={PAD.left + i * groupW} y={PAD.top} width={groupW} height={plotH} fill="transparent" onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHover(i) }} onClick={() => setHover((h) => (h === i ? null : i))} />
               </g>
             )
           })}
@@ -118,7 +126,7 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
       </div>
 
       <details className="mt-2 text-xs text-[var(--muted)]">
-        <summary className="cursor-pointer">Show as table</summary>
+        <summary className="cursor-pointer py-1">Show as table</summary>
         <table className="mt-2 w-full select-text text-left">
           <thead>
             <tr><th className="py-1 font-semibold">Period</th>{series.map((s) => <th key={s.name} className="py-1 text-right font-semibold">{s.name}</th>)}</tr>

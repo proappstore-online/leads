@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { ProShell } from '@proappstore/sdk'
 import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
@@ -169,6 +169,14 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     setSourceId(id)
   }
 
+  /**
+   * Close a modal only if it is still the one that was open. A save can finish after its modal was
+   * closed and another opened (slow mobile networks) - that late save must not close the new one.
+   */
+  function closeIfOpen<T>(set: Dispatch<SetStateAction<T | null>>, opened: T) {
+    set((current) => (current === opened ? null : current))
+  }
+
   function closeJoin() {
     localStorage.removeItem(JOIN_KEY)
     setJoinCode(null)
@@ -252,7 +260,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             <h1 className="display-font text-2xl font-bold text-[var(--ink)]">Sources</h1>
             <p className="mt-0.5 text-sm text-[var(--muted)]">Where leads are found and how each place performs. Click a source for its details and leads.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <select aria-label="Sort sources" value={sourceSort} onChange={(e) => setSourceSort(e.target.value as SourceSort)} className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-sm text-[var(--ink)] outline-none">
               <option value="leads">Most leads</option>
               <option value="reply_rate">Best reply rate</option>
@@ -282,7 +290,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             {(current?.purpose || currentProject?.description) && <p className="mt-0.5 text-sm text-[var(--muted)]">{current?.purpose ?? currentProject?.description}</p>}
             {assignedOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Your own leads assigned to you, and leads shared with you through projects you joined.</p>}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {current && (
               <button type="button" onClick={() => setEditingList(current)} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">Edit list</button>
             )}
@@ -293,20 +301,20 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
           </div>
         </div>
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           <input
             type="search"
             aria-label="Search leads"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, company, title, email, phone, source"
-            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+            className="w-full min-w-0 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
           />
           <select
             aria-label="Filter by status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
           >
             <option value="">Any status</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -316,7 +324,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             aria-label="Filter by assignee"
             value={assignedTo}
             onChange={(e) => setAssignedTo(e.target.value)}
-            className="max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
           >
             <option value="">Anyone</option>
             <option value="none">Not assigned</option>
@@ -327,7 +335,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             aria-label="Filter by fit"
             value={fit}
             onChange={(e) => setFit(e.target.value)}
-            className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
           >
             <option value="">Any fit</option>
             {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
@@ -336,7 +344,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             aria-label="Filter by country"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
-            className="max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
           >
             <option value="">Any country</option>
             <option value="none">Country not confirmed</option>
@@ -346,7 +354,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             aria-label="Filter by source"
             value={sourceId}
             onChange={(e) => setSourceId(e.target.value)}
-            className="max-w-48 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-48 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
           >
             <option value="">Any source</option>
             <option value="none">No source</option>
@@ -395,14 +403,14 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
           userId={userId}
           defaultListId={listId}
           onClose={() => setEditingLead(null)}
-          onSaved={() => { setEditingLead(null); refresh() }}
+          onSaved={() => { closeIfOpen(setEditingLead, editingLead); refresh() }}
         />
       )}
       {editingSource && (
         <SourceForm
           source={editingSource === 'new' ? null : editingSource}
           onClose={() => setEditingSource(null)}
-          onSaved={() => { setEditingSource(null); refresh() }}
+          onSaved={() => { closeIfOpen(setEditingSource, editingSource); refresh() }}
           onDeleted={() => {
             const deleted = editingSource === 'new' ? null : editingSource?.id
             setViewingSourceId(null)
@@ -416,8 +424,8 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
           projects={ownProjects}
           defaultProjectId={projectId}
           onClose={() => setEditingList(null)}
-          onSaved={(id) => { setEditingList(null); browse({ listId: id }); refresh() }}
-          onDeleted={() => { setEditingList(null); browse({}); refresh() }}
+          onSaved={(id) => { closeIfOpen(setEditingList, editingList); browse({ listId: id }); refresh() }}
+          onDeleted={() => { closeIfOpen(setEditingList, editingList); browse({}); refresh() }}
         />
       )}
       {editingProject && (
@@ -425,8 +433,8 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
           project={editingProject === 'new' ? null : editingProject}
           ownerName={userName}
           onClose={() => setEditingProject(null)}
-          onSaved={(id) => { setEditingProject(null); browse({ projectId: id }); refresh() }}
-          onDeleted={() => { setEditingProject(null); browse({}); refresh() }}
+          onSaved={(id) => { closeIfOpen(setEditingProject, editingProject); browse({ projectId: id }); refresh() }}
+          onDeleted={() => { closeIfOpen(setEditingProject, editingProject); browse({}); refresh() }}
           onChanged={refresh}
         />
       )}

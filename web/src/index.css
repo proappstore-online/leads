@@ -117,8 +117,6 @@ html {
 
 body {
   min-height: 100dvh;
-  -webkit-user-select: none;
-  user-select: none;
   background:
     radial-gradient(circle at top left, var(--bg-blob-1), transparent 32%),
     radial-gradient(circle at top right, var(--bg-blob-2), transparent 30%),
@@ -165,9 +163,11 @@ body::after {
   isolation: isolate;
 }
 
-input, textarea, [contenteditable] {
-  -webkit-user-select: text;
-  user-select: text;
+/* Controls don't start a text selection on long-press (it fights taps). Everything else - names,
+   emails, phone numbers, notes - stays selectable so it can be copied. */
+button, nav, summary, select, [role='tab'], [role='tablist'] {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .display-font {
