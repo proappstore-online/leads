@@ -3,10 +3,11 @@ import { ProShell } from '@proappstore/sdk'
 import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { COUNTRY_OPTIONS, countryName } from './lib/countries'
-import { q } from './lib/actions'
+import { q, x } from './lib/actions'
 import { endOfToday } from './lib/lead'
 import { FITS, STATUSES, type Lead, type LeadList, type Project, type ProjectMember, type Sort, type SortKey, type Source, type SourceSort } from './types'
 import { JoinProject } from './components/JoinProject'
+import { LeadBoard } from './components/LeadBoard'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
@@ -20,6 +21,7 @@ import { SignIn } from './components/SignIn'
 const PAGE = 200
 
 const JOIN_KEY = 'leads.join'
+const LAYOUT_KEY = 'leads.layout'
 // An invite link (?join=<code>) is kept through sign-in and offered once the user is in.
 const joinParam = new URLSearchParams(location.search).get('join')
 if (joinParam) {
@@ -85,6 +87,8 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   const [sort, setSort] = useState<Sort>({ key: 'name', dir: 'asc' })
   const [editingLead, setEditingLead] = useState<Lead | 'new' | null>(null)
   const [editingList, setEditingList] = useState<LeadList | 'new' | null>(null)
+  /** Table or Kanban board — the same leads either way; remembered on this device. */
+  const [layout, setLayout] = useState<'table' | 'board'>(() => (localStorage.getItem(LAYOUT_KEY) === 'board' ? 'board' : 'table'))
   const request = useRef(0)
 
   const loadLists = useCallback(async () => {
@@ -197,6 +201,24 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   function closeJoin() {
     localStorage.removeItem(JOIN_KEY)
     setJoinCode(null)
+  }
+
+  function switchLayout(next: 'table' | 'board') {
+    localStorage.setItem(LAYOUT_KEY, next)
+    setLayout(next)
+  }
+
+  /** Board move: shows the new column at once, then saves - and puts the card back if the save is refused. */
+  async function moveLead(lead: Lead, status: string) {
+    setLeads((rows) => rows.map((l) => (l.id === lead.id ? { ...l, status } : l)))
+    try {
+      const { changes } = await x('set_lead_status', { id: lead.id, status })
+      if (changes === 0) throw new Error(`Could not move ${lead.name} - the lead may have been deleted or is no longer assigned to you.`)
+      refresh()
+    } catch (e) {
+      setLeads((rows) => rows.map((l) => (l.id === lead.id ? { ...l, status: lead.status } : l)))
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   function refresh() {
@@ -319,6 +341,11 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             {currentProject && (
               <button type="button" onClick={() => setEditingProject(currentProject)} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">Manage project</button>
             )}
+            <div role="group" aria-label="Layout" className="flex rounded-xl border border-[var(--line-strong)] p-0.5">
+              {(['table', 'board'] as const).map((l) => (
+                <button key={l} type="button" aria-pressed={layout === l} onClick={() => switchLayout(l)} className={`rounded-[10px] px-3 py-1.5 text-sm font-semibold capitalize ${layout === l ? 'bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}>{l}</button>
+              ))}
+            </div>
             <button type="button" onClick={() => setEditingLead('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)]">Add lead</button>
           </div>
         </div>
@@ -403,7 +430,9 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
 
         <div className="mt-4">
           {leads.length > 0 ? (
-            <LeadTable leads={leads} lists={lists} projects={projects} people={people} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
+            layout === 'board'
+              ? <LeadBoard leads={leads} people={people} onOpen={setEditingLead} onMove={moveLead} />
+              : <LeadTable leads={leads} lists={lists} projects={projects} people={people} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
               {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo || tag || followUp ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : currentProject ? 'No leads in this project\'s lists yet.' : 'No leads yet. Add your first one.'}
