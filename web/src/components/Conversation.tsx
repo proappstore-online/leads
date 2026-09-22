@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { q, x } from '../lib/actions'
+import { toInputValue } from '../lib/lead'
 import { PLATFORMS, type Lead, type Message } from '../types'
 import { inputClass } from './styles'
 
 const PAGE = 500
-
-/** Epoch ms → the local `YYYY-MM-DDTHH:mm` string a datetime-local input expects. */
-function toInputValue(ms: number): string {
-  const d = new Date(ms)
-  return new Date(ms - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
-}
 
 /** readOnlyHistory: someone else's lead shared with you — you can add messages but not change recorded ones. */
 export function Conversation({ lead, onChanged, readOnlyHistory = false }: { lead: Lead; onChanged: () => void; readOnlyHistory?: boolean }) {

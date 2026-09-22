@@ -31,6 +31,10 @@
     {
       "name": "0008_projects_members",
       "sql": "CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, description TEXT, owner_name TEXT, created_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS idx_projects_user ON projects (user_id); ALTER TABLE lists ADD COLUMN project_id TEXT; CREATE INDEX IF NOT EXISTS idx_lists_project ON lists (project_id); CREATE TABLE IF NOT EXISTS project_members (project_id TEXT NOT NULL, user_id TEXT NOT NULL, display_name TEXT, joined_at INTEGER NOT NULL, PRIMARY KEY (project_id, user_id)); CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members (user_id); CREATE TABLE IF NOT EXISTS project_invites (code TEXT PRIMARY KEY, project_id TEXT NOT NULL, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS idx_project_invites_project ON project_invites (project_id); ALTER TABLE leads ADD COLUMN assigned_to_user_id TEXT; CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads (assigned_to_user_id)"
+    },
+    {
+      "name": "0009_tags_fields_followups_history",
+      "sql": "ALTER TABLE leads ADD COLUMN tags TEXT; ALTER TABLE leads ADD COLUMN custom_fields TEXT; ALTER TABLE leads ADD COLUMN next_action_at INTEGER; ALTER TABLE leads ADD COLUMN next_action TEXT; ALTER TABLE leads ADD COLUMN history TEXT; CREATE INDEX IF NOT EXISTS idx_leads_next_action ON leads (user_id, next_action_at)"
     }
   ]
 }

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { q, x } from '../lib/actions'
 import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
+import { endOfToday, leadCustomFields, leadTags, toInputValue } from '../lib/lead'
 import { SOCIALS, isProfileLink } from '../lib/socials'
 import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Project, type ProjectMember, type Source } from '../types'
 import { Conversation } from './Conversation'
+import { LeadHistory } from './LeadHistory'
 import { LeadView } from './LeadView'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
@@ -30,13 +32,15 @@ function toFields(lead: Lead): LeadFields {
   return fields
 }
 
-export function LeadForm({ lead, lists, sources, projects, members, userId, defaultListId, onClose, onSaved }: {
+export function LeadForm({ lead, lists, sources, projects, members, people, userId, defaultListId, onClose, onSaved }: {
   lead: Lead | null
   lists: LeadList[]
   sources: Source[]
   projects: Project[]
   /** Members of your projects — the people a lead can be assigned to. */
   members: ProjectMember[]
+  /** Names by user id, you included — for assignments and history. */
+  people: Map<string, string>
   /** The signed-in user's id. */
   userId: string
   /** List being browsed when "Add lead" was pressed — preselected for new leads. */
@@ -49,7 +53,7 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
   const [selected, setSelected] = useState<Set<string>>(new Set(memberOf))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'details' | 'conversation'>('details')
+  const [tab, setTab] = useState<'details' | 'conversation' | 'history'>('details')
   // An existing lead opens read-only; the form is one click away.
   const [editing, setEditing] = useState(!lead)
   // Messages and flags save immediately, so closing after one must still refresh the table.
@@ -61,6 +65,11 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
   const [baseUpdatedAt, setBaseUpdatedAt] = useState(lead?.updated_at ?? null)
   const [assignee, setAssignee] = useState(lead?.assigned_to_user_id ?? null)
   const [status, setStatus] = useState(lead?.status ?? 'new')
+  const [followUp, setFollowUp] = useState({ at: lead?.next_action_at ?? null, action: lead?.next_action ?? null })
+  const [followAt, setFollowAt] = useState(lead?.next_action_at ? toInputValue(lead.next_action_at) : '')
+  const [followAction, setFollowAction] = useState(lead?.next_action ?? '')
+  const [tagsText, setTagsText] = useState(lead ? leadTags(lead).join(', ') : '')
+  const [customRows, setCustomRows] = useState<[string, string][]>(lead ? leadCustomFields(lead) : [])
   // Someone else's lead assigned to you: status, flag and new messages only.
   const shared = Boolean(lead?.shared)
   const sharedIn = shared ? projects.find((p) => p.id === lead?.project_id) : undefined
@@ -102,6 +111,9 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
         setBaseUpdatedAt(fresh.updated_at)
         setAssignee(fresh.assigned_to_user_id)
         setStatus(fresh.status)
+        setFollowUp({ at: fresh.next_action_at, action: fresh.next_action })
+        setFollowAt(fresh.next_action_at ? toInputValue(fresh.next_action_at) : '')
+        setFollowAction(fresh.next_action ?? '')
       }
       setSavedInPlace(true)
       setError('')
@@ -129,6 +141,15 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
       setError('Found-in link must be a full https:// link to the post or page. Clear it if you don\'t have one.')
       return
     }
+    const tags = [...new Map(tagsText.split(',').map((t) => t.trim()).filter(Boolean).map((t) => [t.toLowerCase(), t])).values()]
+    const custom = customRows.filter(([k]) => k.trim()).map(([k, v]) => [k.trim(), v.trim()] as const)
+    if (tags.some((t) => t.length > 40) || custom.some(([k]) => k.length > 40)) {
+      setError('Tags and field names can be up to 40 characters.')
+      return
+    }
+    const tagsChanged = [...tags].map((t) => t.toLowerCase()).sort().join('\n') !== leadTags(lead ?? { tags: null }).map((t) => t.toLowerCase()).sort().join('\n')
+    const customJson = JSON.stringify(Object.fromEntries(custom))
+    const customChanged = customJson !== JSON.stringify(Object.fromEntries(leadCustomFields(lead ?? { custom_fields: null })))
     const id = lead?.id ?? crypto.randomUUID()
     const params: Record<string, unknown> = { id }
     for (const [key, value] of Object.entries(fields)) params[key] = value.trim() || null
@@ -144,6 +165,8 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
         ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id })),
         ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id })),
       ])
+      if (tagsChanged) await x('set_lead_tags', { id, tags: JSON.stringify(tags) })
+      if (customChanged) await x('set_custom_fields', { id, fields: customJson, replace: true })
     })
   }
 
@@ -151,6 +174,8 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
     if (!lead) return
     setFields(toFields(lead))
     setSelected(new Set(memberOf))
+    setTagsText(leadTags(lead).join(', '))
+    setCustomRows(leadCustomFields(lead))
     setError('')
     setEditing(false)
   }
@@ -164,7 +189,7 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
     <Modal title={lead ? lead.name : 'Add lead'} onClose={close}>
       {lead && (
         <div role="tablist" className="mt-3 flex gap-1 border-b border-[var(--line)]">
-          {(['details', 'conversation'] as const).map((t) => (
+          {(['details', 'conversation', 'history'] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -220,11 +245,24 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
         </label>
       ))}
       {lead && !shared && leadProjects.size === 0 && <p className="mt-1 text-xs text-[var(--muted)]">To assign this lead to someone else, put it in a list of a project they joined.</p>}
+      {lead && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="shrink-0 font-medium text-[var(--ink)]">
+            Follow up
+            {followUp.at !== null && followUp.at <= endOfToday() && <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-xs font-bold text-[var(--paper)]">{followUp.at <= Date.now() ? 'Due' : 'Today'}</span>}
+          </span>
+          <input type="datetime-local" aria-label="Follow-up date" value={followAt} onChange={(e) => setFollowAt(e.target.value)} className={`${inputClass} mt-0 w-auto`} />
+          <input type="text" aria-label="Next action" value={followAction} onChange={(e) => setFollowAction(e.target.value)} placeholder="Next action, e.g. call about the demo" className={`${inputClass} mt-0 min-w-0 flex-1 basis-48`} />
+          <button type="button" disabled={saving || !followAt} onClick={() => saveInPlace('set_follow_up', { at: new Date(followAt).getTime(), action: followAction.trim() || null }, 'Not saved - this lead is no longer yours to work.')} className="rounded-xl border border-[var(--line-strong)] px-3 py-2 font-semibold text-[var(--ink)] disabled:opacity-40">Save</button>
+          {followUp.at !== null && <button type="button" disabled={saving} onClick={() => saveInPlace('set_follow_up', {}, 'Not saved - this lead is no longer yours to work.')} className="rounded-xl px-3 py-2 font-semibold text-[var(--muted)] hover:bg-[var(--line)]">Clear</button>}
+        </div>
+      )}
       {lead && tab === 'conversation' && <Conversation lead={lead} readOnlyHistory={shared} onChanged={() => setSavedInPlace(true)} />}
+      {lead && tab === 'history' && <LeadHistory lead={lead} people={people} sources={sources} onChanged={() => setSavedInPlace(true)} />}
       {lead && tab === 'details' && !editing && (
         <>
           {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
-          <LeadView lead={{ ...lead, status }} lists={lists} onEdit={shared ? undefined : () => setEditing(true)} />
+          <LeadView lead={{ ...lead, status, next_action_at: followUp.at, next_action: followUp.action }} lists={lists} onEdit={shared ? undefined : () => setEditing(true)} />
         </>
       )}
       <form onSubmit={save} hidden={tab !== 'details' || !editing} className="mt-4 space-y-5">
@@ -300,6 +338,25 @@ export function LeadForm({ lead, lists, sources, projects, members, userId, defa
             </div>
           </fieldset>
         )}
+
+        <label className="block">
+          <span className="text-sm font-medium text-[var(--ink)]">Tags <span className="font-normal text-[var(--muted)]">— separated by commas</span></span>
+          <input type="text" value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="investor, warm intro" className={inputClass} />
+        </label>
+
+        <fieldset>
+          <legend className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Your fields</legend>
+          <div className="mt-2 space-y-2">
+            {customRows.map(([key, value], i) => (
+              <div key={i} className="flex gap-2">
+                <input type="text" aria-label="Field name" value={key} onChange={(e) => setCustomRows((rows) => rows.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} placeholder="Field, e.g. Budget" className={`${inputClass} mt-0 w-2/5`} />
+                <input type="text" aria-label="Field value" value={value} onChange={(e) => setCustomRows((rows) => rows.map((r, j) => (j === i ? [r[0], e.target.value] : r)))} placeholder="Value" className={`${inputClass} mt-0 min-w-0 flex-1`} />
+                <button type="button" aria-label="Remove field" onClick={() => setCustomRows((rows) => rows.filter((_, j) => j !== i))} className="shrink-0 rounded-lg px-3 text-lg text-[var(--muted)] hover:bg-[var(--line)]">×</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => setCustomRows((rows) => [...rows, ['', '']])} className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ Add a field</button>
+          </div>
+        </fieldset>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="space-y-4">

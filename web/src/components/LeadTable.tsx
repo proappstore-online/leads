@@ -1,11 +1,12 @@
 import { countryName } from '../lib/countries'
+import { isDue, leadTags } from '../lib/lead'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList, Project, Sort, SortKey } from '../types'
 
 const linkClass = 'text-[var(--sky-deep)] underline-offset-4 hover:underline'
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
 
-const SORTS: [SortKey, string][] = [['name', 'Name'], ['email', 'Contact'], ['fit', 'Fit'], ['last_contact', 'Last contact'], ['last_reply', 'Last reply'], ['status', 'Status']]
+const SORTS: [SortKey, string][] = [['name', 'Name'], ['email', 'Contact'], ['fit', 'Fit'], ['next_action', 'Follow-up'], ['last_contact', 'Last contact'], ['last_reply', 'Last reply'], ['status', 'Status']]
 
 /** Leads as a table from the sm breakpoint up, and as stacked cards on phones. */
 export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen }: {
@@ -27,6 +28,11 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
   const assignee = (lead: Lead) => (lead.assigned_to_user_id ? people.get(lead.assigned_to_user_id) ?? 'Former member' : null)
   const fitClass = (lead: Lead) => (lead.fit === 'high' ? 'text-[var(--success)]' : lead.fit === 'low' ? 'text-[var(--muted)]' : 'text-[var(--ink)]')
   const attentionRow = 'bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] shadow-[inset_3px_0_0_var(--warning)]'
+  const followUp = (lead: Lead) => lead.next_action_at && (
+    <span title={lead.next_action ?? undefined} className={isDue(lead) ? 'font-semibold text-[var(--warning)]' : undefined}>
+      {isDue(lead) ? 'Due ' : ''}{date(lead.next_action_at)}
+    </span>
+  )
 
   /** Name, badges, role, country and where the lead was found — the same in both layouts. */
   const summary = (lead: Lead) => (
@@ -50,6 +56,11 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
             ? (lead.source_link ? <a href={lead.source_link} target="_blank" rel="noreferrer" className={linkClass}>{lead.source_name}</a> : lead.source_name)
             : lead.source ?? 'unknown'}
           {lead.source_url && <> · <a href={lead.source_url} target="_blank" rel="noreferrer" className={linkClass}>post</a></>}
+        </div>
+      )}
+      {lead.tags && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {leadTags(lead).map((t) => <span key={t} className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-deep)]">#{t}</span>)}
         </div>
       )}
     </>
@@ -104,6 +115,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
                 <span className="rounded-full bg-[var(--line)] px-2 py-0.5 font-semibold capitalize text-[var(--ink)]">{lead.status}</span>
                 {lead.fit && <span className={`font-semibold capitalize ${fitClass(lead)}`}>{lead.fit} fit</span>}
+                {lead.next_action_at && <span>follow up {followUp(lead)}{lead.next_action ? ` · ${lead.next_action}` : ''}</span>}
                 <span>last contact {date(lead.last_message_at)}</span>
                 {lead.last_reply_at && <span>reply {date(lead.last_reply_at)}</span>}
                 {assignee(lead) && <span>→ {assignee(lead)}</span>}
@@ -123,6 +135,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
               <th className="hidden px-4 py-3 font-semibold lg:table-cell">Lists</th>
               <th className="hidden px-4 py-3 font-semibold md:table-cell">Assigned</th>
               {sortable('fit', 'Fit')}
+              {sortable('next_action', 'Follow-up')}
               {sortable('last_contact', 'Last contact', 'hidden md:table-cell')}
               {sortable('last_reply', 'Last reply', 'hidden lg:table-cell')}
               {sortable('status', 'Status')}
@@ -150,6 +163,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
                   {assignee(lead) ?? <span className="text-[var(--muted)]">—</span>}
                 </td>
                 <td className={`px-4 py-3 text-xs font-semibold capitalize ${fitClass(lead)}`}>{lead.fit ?? '—'}</td>
+                <td className="px-4 py-3 text-xs text-[var(--muted)]">{followUp(lead) || '—'}</td>
                 <td className="hidden px-4 py-3 text-xs text-[var(--muted)] md:table-cell">{date(lead.last_message_at)}</td>
                 <td className="hidden px-4 py-3 text-xs text-[var(--muted)] lg:table-cell">{date(lead.last_reply_at)}</td>
                 <td className="px-4 py-3 text-xs font-semibold capitalize text-[var(--muted)]">{lead.status}</td>

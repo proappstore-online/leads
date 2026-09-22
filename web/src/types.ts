@@ -65,6 +65,13 @@ export type Lead = { [K in keyof LeadFields]: LeadFields[K] | null } & {
   shared?: number
   /** From list_assigned_leads: the project the lead is reached through. */
   project_id?: string | null
+  /** JSON array of tags — read with leadTags(). */
+  tags: string | null
+  /** JSON object of the user's own fields — read with leadCustomFields(). */
+  custom_fields: string | null
+  /** Next follow-up (epoch ms) and what to do then. */
+  next_action_at: number | null
+  next_action: string | null
   created_at: number
   updated_at: number
 }
@@ -92,7 +99,7 @@ export interface Message {
 }
 
 /** Column a lead table can be sorted by — the `sort` values list_leads accepts. */
-export type SortKey = 'name' | 'email' | 'fit' | 'last_contact' | 'last_reply' | 'status'
+export type SortKey = 'name' | 'email' | 'fit' | 'last_contact' | 'last_reply' | 'next_action' | 'status'
 export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
 
 /** A place leads are found (Facebook group, page, event…) with its performance, as list_sources returns it. */
@@ -148,4 +155,16 @@ export interface ProjectMember {
   user_id: string
   display_name: string | null
   joined_at: number
+}
+
+/** One entry of a lead's history, as get_lead_history returns it (newest first). */
+export interface HistoryEntry {
+  seq: number
+  at: number
+  by_user_id: string
+  /** The action that made the change (update_lead, set_lead_status, …); null for a note. */
+  via: string | null
+  note: string | null
+  /** JSON object of field: [old, new]. */
+  changes: string | null
 }

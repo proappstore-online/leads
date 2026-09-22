@@ -4,6 +4,7 @@ import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { COUNTRY_OPTIONS, countryName } from './lib/countries'
 import { q } from './lib/actions'
+import { endOfToday } from './lib/lead'
 import { FITS, STATUSES, type Lead, type LeadList, type Project, type ProjectMember, type Sort, type SortKey, type Source, type SourceSort } from './types'
 import { JoinProject } from './components/JoinProject'
 import { LeadForm } from './components/LeadForm'
@@ -47,6 +48,13 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   const [attentionCount, setAttentionCount] = useState(0)
   const [attentionOnly, setAttentionOnly] = useState(false)
   const [assignedCount, setAssignedCount] = useState(0)
+  const [followUpCount, setFollowUpCount] = useState(0)
+  /** Open leads whose follow-up is due by tonight, soonest first. */
+  const [followUpsOnly, setFollowUpsOnly] = useState(false)
+  const [tags, setTags] = useState<{ tag: string; leads: number }[]>([])
+  const [tag, setTag] = useState('')
+  /** '' = any, 'due', 'scheduled', 'none' = open lead with nothing scheduled. */
+  const [followUp, setFollowUp] = useState('')
   /** Leads assigned to you — your own and those shared with you. */
   const [assignedOnly, setAssignedOnly] = useState(false)
   const [projectId, setProjectId] = useState<string | null>(null)
@@ -81,12 +89,15 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
 
   const loadLists = useCallback(async () => {
     try {
-      const [rows, count, projectRows, memberRows] = await Promise.all([
+      const [rows, count, projectRows, memberRows, tagRows] = await Promise.all([
         q<LeadList>('list_lists'),
-        q<{ total: number; needs_attention: number; no_source: number; assigned_to_me: number }>('count_leads'),
+        q<{ total: number; needs_attention: number; no_source: number; assigned_to_me: number; follow_ups_due: number }>('count_leads', { due_before: endOfToday() }),
         q<Project>('list_projects'),
         q<ProjectMember>('list_project_members'),
+        q<{ tag: string; leads: number }>('list_tags'),
       ])
+      setTags(tagRows)
+      setFollowUpCount(count[0]?.follow_ups_due ?? 0)
       setLists(rows)
       setProjects(projectRows)
       setMembers(memberRows)
@@ -116,7 +127,12 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     try {
       const rows = assignedOnly
         ? await q<Lead>('list_assigned_leads', { status: status || null, q: search.trim() || null, limit: PAGE, offset })
-        : await q<Lead>('list_leads', { list_id: listId, project_id: projectId, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null, needs_attention: attentionOnly || null, source_id: sourceId || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
+        : await q<Lead>('list_leads', {
+          list_id: listId, project_id: projectId, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null,
+          needs_attention: attentionOnly || null, source_id: sourceId || null, tag: tag || null, q: search.trim() || null,
+          follow_up: followUpsOnly ? 'due' : followUp || null, due_before: endOfToday(),
+          sort: followUpsOnly ? 'next_action' : sort.key, dir: followUpsOnly ? 'asc' : sort.dir, limit: PAGE, offset,
+        })
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
       setHasMore(rows.length === PAGE)
@@ -126,7 +142,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [assignedOnly, listId, projectId, assignedTo, status, fit, country, attentionOnly, sourceId, search, sort])
+  }, [assignedOnly, followUpsOnly, listId, projectId, assignedTo, status, fit, country, attentionOnly, sourceId, tag, followUp, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
   useEffect(() => { loadSources() }, [loadSources])
@@ -155,12 +171,13 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   }
 
   /** Show the leads table for one scope: a list, a project, flagged or assigned leads — or all leads. */
-  function browse(scope: { listId?: string; projectId?: string; attention?: boolean; assigned?: boolean }) {
+  function browse(scope: { listId?: string; projectId?: string; attention?: boolean; assigned?: boolean; followUps?: boolean }) {
     setView('leads')
     setListId(scope.listId ?? null)
     setProjectId(scope.projectId ?? null)
     setAttentionOnly(Boolean(scope.attention))
     setAssignedOnly(Boolean(scope.assigned))
+    setFollowUpsOnly(Boolean(scope.followUps))
   }
 
   function showSourceLeads(id: string) {
@@ -210,13 +227,17 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
       <nav aria-label="Lead lists" className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
-        <button type="button" onClick={() => { browse({}); setSourceId('') }} className={chip(view === 'leads' && listId === null && projectId === null && !attentionOnly && !assignedOnly)}>
+        <button type="button" onClick={() => { browse({}); setSourceId('') }} className={chip(view === 'leads' && listId === null && projectId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
           <span>All leads</span>
           <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
         </button>
         <button type="button" onClick={() => browse({ attention: true })} className={chip(view === 'leads' && attentionOnly)}>
           <span className={attentionCount > 0 ? 'text-[var(--warning)]' : undefined}>Needs attention</span>
           <span className={`rounded-full px-2 text-xs font-bold ${attentionCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{attentionCount}</span>
+        </button>
+        <button type="button" onClick={() => browse({ followUps: true })} className={chip(view === 'leads' && followUpsOnly)}>
+          <span className={followUpCount > 0 ? 'text-[var(--warning)]' : undefined}>Follow-ups due</span>
+          <span className={`rounded-full px-2 text-xs font-bold ${followUpCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{followUpCount}</span>
         </button>
         <button type="button" onClick={() => browse({ assigned: true })} className={chip(view === 'leads' && assignedOnly)}>
           <span>Assigned to me</span>
@@ -286,8 +307,9 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : assignedOnly ? 'Assigned to me' : current?.name ?? currentProject?.name ?? 'All leads'}</h1>
+            <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : followUpsOnly ? 'Follow-ups due' : assignedOnly ? 'Assigned to me' : current?.name ?? currentProject?.name ?? 'All leads'}</h1>
             {(current?.purpose || currentProject?.description) && <p className="mt-0.5 text-sm text-[var(--muted)]">{current?.purpose ?? currentProject?.description}</p>}
+            {followUpsOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Open leads whose follow-up is due by tonight, soonest first. Filter by Follow-up: none set to find leads going cold.</p>}
             {assignedOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Your own leads assigned to you, and leads shared with you through projects you joined.</p>}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -360,6 +382,20 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             <option value="none">No source</option>
             {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+          {!followUpsOnly && (
+            <select aria-label="Filter by follow-up" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
+              <option value="">Any follow-up</option>
+              <option value="due">Follow-up due</option>
+              <option value="scheduled">Follow-up scheduled</option>
+              <option value="none">No follow-up set</option>
+            </select>
+          )}
+          {tags.length > 0 && (
+            <select aria-label="Filter by tag" value={tag} onChange={(e) => setTag(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
+              <option value="">Any tag</option>
+              {tags.map((t) => <option key={t.tag} value={t.tag}>#{t.tag} ({t.leads})</option>)}
+            </select>
+          )}
           </>}
         </div>
 
@@ -370,7 +406,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             <LeadTable leads={leads} lists={lists} projects={projects} people={people} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
-              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : currentProject ? 'No leads in this project\'s lists yet.' : 'No leads yet. Add your first one.'}
+              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo || tag || followUp ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : currentProject ? 'No leads in this project\'s lists yet.' : 'No leads yet. Add your first one.'}
             </p>
           )}
           {hasMore && (
@@ -400,6 +436,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
           sources={sources}
           projects={projects}
           members={members}
+          people={people}
           userId={userId}
           defaultListId={listId}
           onClose={() => setEditingLead(null)}

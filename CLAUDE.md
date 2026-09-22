@@ -72,8 +72,13 @@ tell agents what `changes: 0` means and which tool explains it (`check_lead_link
 Params are bound once through a `FROM (SELECT :x AS x, …) AS p` subquery — D1 allows 100 binds.
 
 Reporting (`stats_timeline`, `stats_pipeline`, `recent_activity`) is derived from row
-timestamps - there is no event log. `recent_activity` can therefore only show a lead's latest
-edit, and a cleared flag disappears from it. The Stats page (`web/src/components/StatsPage.tsx`)
+timestamps, so `recent_activity` only shows a lead's latest edit. Per-lead history is
+`leads.history`: a JSON array (capped at 300) appended by the same `UPDATE` that makes the change -
+triggers are rejected and a second statement would turn the action into a batch, whose result has
+no top-level `changes`. Any new lead write must append to it like the existing ones, and lead reads
+list their columns instead of `l.*` so history stays out of them. Tags (`leads.tags`, JSON array),
+custom fields (`leads.custom_fields`, JSON object) and the follow-up (`next_action_at`,
+`next_action`) are set by their own actions, never by `update_lead`. The Stats page (`web/src/components/StatsPage.tsx`)
 builds local-time buckets client-side and passes them as JSON `[start, end)` pairs. Chart series
 colours are `--series-1` / `--series-2` in `index.css`, validated for CVD and contrast in both
 themes - keep them if you add a chart.

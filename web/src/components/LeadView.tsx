@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { countryName } from '../lib/countries'
+import { isDue, leadCustomFields, leadTags } from '../lib/lead'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList } from '../types'
 
@@ -33,12 +34,19 @@ export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[
             <span className="rounded-full bg-[var(--line)] px-2 py-0.5 font-semibold capitalize text-[var(--ink)]">{lead.status}</span>
             {lead.fit && <span className="rounded-full bg-[var(--line)] px-2 py-0.5 font-semibold capitalize text-[var(--ink)]">{lead.fit} fit</span>}
             {listNames.map((n) => <span key={n} className="rounded-full border border-[var(--line-strong)] px-2 py-0.5 text-[var(--muted)]">{n}</span>)}
+            {leadTags(lead).map((t) => <span key={t} className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-medium text-[var(--accent-deep)]">#{t}</span>)}
           </p>
         </div>
         {onEdit && <button type="button" onClick={onEdit} className="shrink-0 rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--line)]">Edit</button>}
       </div>
 
       <dl className="mt-4 divide-y divide-[var(--line)] border-y border-[var(--line)]">
+        {lead.next_action_at && (
+          <Row label="Follow up">
+            <span className={isDue(lead) ? 'font-semibold text-[var(--warning)]' : undefined}>{date(lead.next_action_at)}{isDue(lead) ? ' (due)' : ''}</span>
+            {lead.next_action && <> · {lead.next_action}</>}
+          </Row>
+        )}
         <Row label="Where">
           {[lead.location, lead.country ? countryName(lead.country) : null].filter(Boolean).join(', ') || '—'}
           {!lead.country && <span className="ml-2 text-xs font-semibold text-[var(--warning)]">country not confirmed</span>}
@@ -65,6 +73,7 @@ export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[
         )}
         {lead.found_at && <Row label="Found">{date(lead.found_at)}</Row>}
         {lead.last_message_at && <Row label="Last contact">{date(lead.last_message_at)}{lead.last_reply_at ? ` · last reply ${date(lead.last_reply_at)}` : ' · no reply yet'}</Row>}
+        {leadCustomFields(lead).map(([k, v]) => <Row key={`custom-${k}`} label={k}>{v}</Row>)}
         <Row label="Added">{date(lead.created_at)}{lead.updated_at > lead.created_at + 5000 ? ` · changed ${date(lead.updated_at)}` : ''}</Row>
       </dl>
 
