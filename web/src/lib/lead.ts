@@ -23,3 +23,9 @@ export function endOfToday(): number {
 export function toInputValue(ms: number): string {
   return new Date(ms - new Date(ms).getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
+
+/**
+ * The project_id that addresses a list in every list-scoped action (#4): its project, or 'none' for a
+ * list made before projects that has not been moved into one yet.
+ */
+export const projectOf = (list: { project_id: string | null }) => list.project_id ?? 'none'

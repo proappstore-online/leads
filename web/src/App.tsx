@@ -4,7 +4,7 @@ import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { COUNTRY_OPTIONS, countryName } from './lib/countries'
 import { q, x } from './lib/actions'
-import { endOfToday } from './lib/lead'
+import { endOfToday, projectOf } from './lib/lead'
 import { FITS, STATUSES, type Lead, type LeadList, type Project, type ProjectMember, type Sort, type SortKey, type Source, type SourceSort } from './types'
 import { JoinProject } from './components/JoinProject'
 import { LeadBoard } from './components/LeadBoard'
@@ -125,6 +125,8 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     }
   }, [sourceSort])
 
+  // A list is addressed by its project (#4) - 'none' for a list made before projects.
+  const selectedListProject = listId ? projectOf(lists.find((l) => l.id === listId) ?? { project_id: null }) : null
   const loadLeads = useCallback(async (offset: number) => {
     const id = ++request.current
     setLoading(true)
@@ -132,7 +134,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
       const rows = assignedOnly
         ? await q<Lead>('list_assigned_leads', { status: status || null, q: search.trim() || null, limit: PAGE, offset })
         : await q<Lead>('list_leads', {
-          list_id: listId, project_id: projectId, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null,
+          list_id: listId, project_id: selectedListProject ?? projectId, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null,
           needs_attention: attentionOnly || null, source_id: sourceId || null, tag: tag || null, q: search.trim() || null,
           follow_up: followUpsOnly ? 'due' : followUp || null, due_before: endOfToday(),
           sort: followUpsOnly ? 'next_action' : sort.key, dir: followUpsOnly ? 'asc' : sort.dir, limit: PAGE, offset,
@@ -146,7 +148,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [assignedOnly, followUpsOnly, listId, projectId, assignedTo, status, fit, country, attentionOnly, sourceId, tag, followUp, search, sort])
+  }, [assignedOnly, followUpsOnly, listId, selectedListProject, projectId, assignedTo, status, fit, country, attentionOnly, sourceId, tag, followUp, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
   useEffect(() => { loadSources() }, [loadSources])
@@ -274,6 +276,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
             {lists.filter((l) => l.project_id === project.id).map((l) => listChip(l, true))}
           </div>
         ))}
+        {looseLists.length > 0 && <div className="hidden px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] lg:block" title="Lists from before projects - open one and choose its project">Not in a project</div>}
         {looseLists.map((l) => listChip(l))}
         <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New list</button>
         <button type="button" onClick={() => setEditingProject('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New project</button>
@@ -489,6 +492,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
           list={editingList === 'new' ? null : editingList}
           projects={ownProjects}
           defaultProjectId={projectId}
+          ownerName={userName}
           onClose={() => setEditingList(null)}
           onSaved={(id) => { closeIfOpen(setEditingList, editingList); browse({ listId: id }); refresh() }}
           onDeleted={() => { closeIfOpen(setEditingList, editingList); browse({}); refresh() }}
@@ -498,6 +502,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
         <ProjectForm
           project={editingProject === 'new' ? null : editingProject}
           ownerName={userName}
+          listCount={editingProject === 'new' ? 0 : lists.filter((l) => l.project_id === editingProject.id).length}
           onClose={() => setEditingProject(null)}
           onSaved={(id) => { closeIfOpen(setEditingProject, editingProject); browse({ projectId: id }); refresh() }}
           onDeleted={() => { closeIfOpen(setEditingProject, editingProject); browse({}); refresh() }}

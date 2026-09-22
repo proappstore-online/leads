@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { q } from '../lib/actions'
+import { projectOf } from '../lib/lead'
 import { FITS, STATUSES, type LeadList, type Source } from '../types'
 import { BarChart } from './BarChart'
 
@@ -94,7 +95,11 @@ export function StatsPage({ lists, sources, version, onOpenLead }: {
   const [error, setError] = useState('')
 
   const { pairs, labels } = useMemo(() => buckets(range), [range])
-  const filters = useMemo(() => ({ source_id: sourceId || null, list_id: listId || null }), [sourceId, listId])
+  // A list is addressed by its project (#4).
+  const filters = useMemo(() => {
+    const list = lists.find((l) => l.id === listId)
+    return { source_id: sourceId || null, list_id: list ? list.id : null, project_id: list ? projectOf(list) : null }
+  }, [sourceId, listId, lists])
 
   useEffect(() => {
     let live = true

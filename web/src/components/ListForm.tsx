@@ -1,23 +1,30 @@
 import { useState } from 'react'
 import { x } from '../lib/actions'
+import { projectOf } from '../lib/lead'
 import type { LeadList, Project } from '../types'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
 
+const NEW_PROJECT = '__new'
 
-export function ListForm({ list, projects, defaultProjectId, onClose, onSaved, onDeleted }: {
+/** Create or edit a list. Every list is in a project — pick one, or name a new one right here. */
+export function ListForm({ list, projects, defaultProjectId, ownerName, onClose, onSaved, onDeleted }: {
   list: LeadList | null
-  /** Your own projects — a list can belong to one. */
+  /** Your own projects. */
   projects: Project[]
   /** Project being browsed when "New list" was pressed — preselected for a new list. */
   defaultProjectId: string | null
+  /** Your name, stored on a project created here (members see it). */
+  ownerName: string
   onClose: () => void
   onSaved: (id: string) => void
   onDeleted: (id: string) => void
 }) {
   const [name, setName] = useState(list?.name ?? '')
   const [purpose, setPurpose] = useState(list?.purpose ?? '')
-  const [projectId, setProjectId] = useState(list ? list.project_id ?? '' : defaultProjectId ?? '')
+  // A list from before projects starts with '' (no project) until it is moved into one.
+  const [projectId, setProjectId] = useState(list ? list.project_id ?? '' : defaultProjectId ?? projects[0]?.id ?? NEW_PROJECT)
+  const [newProject, setNewProject] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -35,12 +42,19 @@ export function ListForm({ list, projects, defaultProjectId, onClose, onSaved, o
     e.preventDefault()
     const id = list?.id ?? crypto.randomUUID()
     run(async () => {
+      let target = projectId
+      if (target === NEW_PROJECT) {
+        target = crypto.randomUUID()
+        await x('create_project', { id: target, name: newProject.trim(), owner_name: ownerName || null })
+      }
       const fields = { id, name: name.trim(), purpose: purpose.trim() || null }
       if (list) {
-        await x('update_list', fields)
-        if (projectId !== (list.project_id ?? '')) await x('set_list_project', { id, project_id: projectId || null })
+        const { changes } = await x('update_list', { ...fields, project_id: projectOf(list) })
+        if (changes === 0) throw new Error('Not saved - this list was moved or deleted. Close and reopen it.')
+        if (target && target !== list.project_id) await x('set_list_project', { id, project_id: projectOf(list), to_project_id: target })
       } else {
-        await x('create_list', { ...fields, project_id: projectId || null })
+        const { changes } = await x('create_list', { ...fields, project_id: target })
+        if (changes === 0) throw new Error('Not saved - that project no longer exists.')
       }
       onSaved(id)
     })
@@ -49,7 +63,7 @@ export function ListForm({ list, projects, defaultProjectId, onClose, onSaved, o
   function remove() {
     if (!list || !confirm(`Delete the list "${list.name}"? Its leads stay in your database.`)) return
     run(async () => {
-      await x('delete_list', { id: list.id })
+      await x('delete_list', { id: list.id, project_id: projectOf(list) })
       onDeleted(list.id)
     })
   }
@@ -65,13 +79,19 @@ export function ListForm({ list, projects, defaultProjectId, onClose, onSaved, o
           <span className="text-sm font-medium text-[var(--ink)]">Purpose</span>
           <input type="text" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="What is this list for?" className={inputClass} />
         </label>
-        {projects.length > 0 && (
+        <label className="block">
+          <span className="text-sm font-medium text-[var(--ink)]">Project</span>
+          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} required className={inputClass}>
+            {list && !list.project_id && <option value="">Not in a project yet — choose one</option>}
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            <option value={NEW_PROJECT}>+ New project…</option>
+          </select>
+          {list && !list.project_id && <span className="mt-1 block text-xs text-[var(--muted)]">This list is from before projects. Every list now belongs to one - choose it here.</span>}
+        </label>
+        {projectId === NEW_PROJECT && (
           <label className="block">
-            <span className="text-sm font-medium text-[var(--ink)]">Project</span>
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inputClass}>
-              <option value="">No project</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <span className="text-sm font-medium text-[var(--ink)]">New project name</span>
+            <input type="text" value={newProject} onChange={(e) => setNewProject(e.target.value)} placeholder="Client, initiative…" required className={inputClass} />
           </label>
         )}
         {error && <p className="text-sm text-[var(--error)]">{error}</p>}

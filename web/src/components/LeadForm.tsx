@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { q, x } from '../lib/actions'
 import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
-import { endOfToday, leadCustomFields, leadTags, toInputValue } from '../lib/lead'
+import { endOfToday, leadCustomFields, leadTags, projectOf, toInputValue } from '../lib/lead'
 import { SOCIALS, isProfileLink } from '../lib/socials'
 import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Project, type ProjectMember, type Source } from '../types'
 import { Conversation } from './Conversation'
@@ -155,6 +155,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
     for (const [key, value] of Object.entries(fields)) params[key] = value.trim() || null
     if (lead) params.if_unchanged_since = baseUpdatedAt
     const before = new Set(lead ? memberOf : [])
+    const listProject = (listId: string) => projectOf(lists.find((l) => l.id === listId) ?? { project_id: null })
     run(async () => {
       const { changes } = await x(lead ? 'update_lead' : 'create_lead', params)
       // The actions refuse the whole write on a non-link social field or a duplicate email / profile link.
@@ -162,8 +163,8 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
         ? 'Not saved. Either this lead was changed by someone else (for example an agent) since you opened it - close and reopen it to see the latest - or a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.'
         : 'Not saved. Either a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.')
       await Promise.all([
-        ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id })),
-        ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id })),
+        ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id, project_id: listProject(list_id) })),
+        ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id, project_id: listProject(list_id) })),
       ])
       if (tagsChanged) await x('set_lead_tags', { id, tags: JSON.stringify(tags) })
       if (customChanged) await x('set_custom_fields', { id, fields: customJson, replace: true })

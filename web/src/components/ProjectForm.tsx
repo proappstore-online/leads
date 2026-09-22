@@ -12,10 +12,12 @@ interface Invite {
 const inviteLink = (code: string) => `${location.origin}/?join=${code}`
 
 /** Create or manage a project: name, members and invite links. A project you joined only offers Leave. */
-export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, onChanged }: {
+export function ProjectForm({ project, ownerName, listCount, onClose, onSaved, onDeleted, onChanged }: {
   project: Project | null
   /** Your name, shown to the people you invite. */
   ownerName: string
+  /** How many of your lists are in this project — it can only be deleted once it has none. */
+  listCount: number
   onClose: () => void
   onSaved: (id: string) => void
   onDeleted: () => void
@@ -68,7 +70,7 @@ export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, o
   }
 
   function remove() {
-    if (!project || !confirm(`Delete the project "${project.name}"? Its lists and leads stay; its members lose access.`)) return
+    if (!project || !confirm(`Delete the project "${project.name}"? Its members lose access.`)) return
     run(async () => {
       await x('delete_project', { id: project.id })
       onDeleted()
@@ -178,7 +180,8 @@ export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, o
       {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
       {project && (
         <div className="mt-4 border-t border-[var(--line)] pt-4">
-          <button type="button" onClick={remove} disabled={saving} className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--error)] hover:bg-[var(--line)]">Delete project</button>
+          <button type="button" onClick={remove} disabled={saving || listCount > 0} className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--error)] hover:bg-[var(--line)] disabled:opacity-40">Delete project</button>
+          {listCount > 0 && <p className="mt-1 text-xs text-[var(--muted)]">Every list belongs to a project. Move this project's {listCount === 1 ? 'list' : `${listCount} lists`} to another project or delete {listCount === 1 ? 'it' : 'them'} first.</p>}
         </div>
       )}
     </Modal>
