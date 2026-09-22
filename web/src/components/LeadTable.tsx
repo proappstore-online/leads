@@ -1,3 +1,4 @@
+import { countryName } from '../lib/countries'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList, Sort, SortKey } from '../types'
 
@@ -45,7 +46,12 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
                   {lead.needs_attention ? <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--paper)]">Needs attention</span> : null}
                 </div>
                 {lead.needs_attention && lead.attention_reason ? <div className="text-xs font-medium text-[var(--warning)]">{lead.attention_reason}</div> : null}
-                <div className="text-xs text-[var(--muted)]">{[lead.title, lead.company].filter(Boolean).join(' · ')}</div>
+                <div className="text-xs text-[var(--muted)]">
+                  {[lead.title, lead.company, lead.location].filter(Boolean).join(' · ')}
+                  {lead.country
+                    ? <span title={countryName(lead.country)} className="ml-1.5 rounded bg-[var(--line)] px-1 font-semibold text-[var(--ink)]">{lead.country}</span>
+                    : <span title="Country not confirmed" className="ml-1.5 font-semibold text-[var(--warning)]">country?</span>}
+                </div>
                 {(lead.source_name || lead.source || lead.source_url) && (
                   <div className="text-xs text-[var(--muted)]" onClick={(e) => e.stopPropagation()}>
                     Found in:{' '}

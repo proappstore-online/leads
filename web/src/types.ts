@@ -21,6 +21,8 @@ export interface LeadFields {
   phone: string
   website: string
   location: string
+  /** Confirmed country, ISO 3166 alpha-2. Required on create; older leads may not have one. */
+  country: string
   linkedin: string
   twitter: string
   instagram: string

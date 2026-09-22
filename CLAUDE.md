@@ -38,6 +38,10 @@ Platform conventions: https://proappstore.online/skills.md
   raised by agents (`flag_needs_attention`) or by hand, separate from `status`. Flagged leads are
   always listed first by `list_leads`, highlighted in the table, and have their own sidebar view.
   No lead write other than `clear_needs_attention` resets it.
+- `leads.country` — confirmed country, ISO 3166 alpha-2. Required by `create_lead` (the platform
+  rejects a call without it); `update_lead` can change it but never clear it (`COALESCE`), so
+  leads from before 0007 stay editable. The 249 codes live in `mcp.json` and
+  `web/src/lib/countries.ts` — keep them in step.
 - `messages.seq` keeps thread order when several messages share a timestamp.
 
 Every row carries `user_id`; each signed-in user sees only their own database.

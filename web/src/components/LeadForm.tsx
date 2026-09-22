@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { q, x } from '../lib/actions'
+import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
 import { SOCIALS, isProfileLink } from '../lib/socials'
 import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Source } from '../types'
 import { Conversation } from './Conversation'
@@ -17,7 +18,7 @@ const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholde
 ]
 
 const EMPTY: LeadFields = {
-  name: '', title: '', company: '', source_id: '', source_url: '', email: '', phone: '', website: '', location: '',
+  name: '', title: '', company: '', source_id: '', source_url: '', email: '', phone: '', website: '', location: '', country: '',
   linkedin: '', twitter: '', instagram: '', facebook: '', tiktok: '', youtube: '', github: '',
   fit: '', status: 'new', notes: '',
 }
@@ -168,6 +169,15 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
           <label className="block sm:col-span-2">
             <span className="text-sm font-medium text-[var(--ink)]">Name</span>
             <input type="text" value={fields.name} onChange={(e) => set('name', e.target.value)} required autoFocus className={inputClass} />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-[var(--ink)]">Country <span className="font-normal text-[var(--muted)]">— confirmed, not guessed</span></span>
+            <select value={fields.country} onChange={(e) => set('country', e.target.value)} required={!lead} className={inputClass}>
+              {/* A set country can be changed but not cleared, so only offer an empty choice when there is none. */}
+              {!lead?.country && <option value="">{lead ? 'Not confirmed yet' : 'Choose the country'}</option>}
+              {COUNTRY_OPTIONS.map((c) => <option key={c} value={c}>{countryName(c)}</option>)}
+            </select>
+            {lead && !lead.country && <span className="mt-1 block text-xs text-[var(--warning)]">Added before country was required - set it once you have confirmed it.</span>}
           </label>
           <label className="block">
             <span className="text-sm font-medium text-[var(--ink)]">Found in</span>

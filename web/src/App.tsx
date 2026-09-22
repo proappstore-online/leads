@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ProShell } from '@proappstore/sdk'
 import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
+import { COUNTRY_OPTIONS, countryName } from './lib/countries'
 import { q } from './lib/actions'
 import { FITS, STATUSES, type Lead, type LeadList, type Sort, type SortKey, type Source, type SourceSort } from './types'
 import { LeadForm } from './components/LeadForm'
@@ -50,6 +51,8 @@ function Home() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [fit, setFit] = useState('')
+  /** '' = any, 'none' = not confirmed yet, otherwise an ISO code. */
+  const [country, setCountry] = useState('')
   const [sort, setSort] = useState<Sort>({ key: 'name', dir: 'asc' })
   const [editingLead, setEditingLead] = useState<Lead | 'new' | null>(null)
   const [editingList, setEditingList] = useState<LeadList | 'new' | null>(null)
@@ -82,7 +85,7 @@ function Home() {
     const id = ++request.current
     setLoading(true)
     try {
-      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, fit: fit || null, needs_attention: attentionOnly || null, source_id: sourceId || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
+      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, fit: fit || null, country: country || null, needs_attention: attentionOnly || null, source_id: sourceId || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
       setHasMore(rows.length === PAGE)
@@ -92,7 +95,7 @@ function Home() {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [listId, status, fit, attentionOnly, sourceId, search, sort])
+  }, [listId, status, fit, country, attentionOnly, sourceId, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
   useEffect(() => { loadSources() }, [loadSources])
@@ -241,6 +244,16 @@ function Home() {
             {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
           <select
+            aria-label="Filter by country"
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            className="max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+          >
+            <option value="">Any country</option>
+            <option value="none">Country not confirmed</option>
+            {COUNTRY_OPTIONS.map((c) => <option key={c} value={c}>{countryName(c)}</option>)}
+          </select>
+          <select
             aria-label="Filter by source"
             value={sourceId}
             onChange={(e) => setSourceId(e.target.value)}
@@ -259,7 +272,7 @@ function Home() {
             <LeadTable leads={leads} lists={lists} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
-              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : search || status || fit || sourceId ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}
+              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : search || status || fit || country || sourceId ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}
             </p>
           )}
           {hasMore && (
