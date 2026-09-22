@@ -4,6 +4,7 @@ import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
 import { SOCIALS, isProfileLink } from '../lib/socials'
 import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Source } from '../types'
 import { Conversation } from './Conversation'
+import { LeadView } from './LeadView'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
 
@@ -44,6 +45,8 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'details' | 'conversation'>('details')
+  // An existing lead opens read-only; the form is one click away.
+  const [editing, setEditing] = useState(!lead)
   // Messages and flags save immediately, so closing after one must still refresh the table.
   const [savedInPlace, setSavedInPlace] = useState(false)
   const close = savedInPlace ? onSaved : onClose
@@ -124,6 +127,14 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
     })
   }
 
+  function cancelEdit() {
+    if (!lead) return
+    setFields(toFields(lead))
+    setSelected(new Set(memberOf))
+    setError('')
+    setEditing(false)
+  }
+
   function remove() {
     if (!lead || !confirm(`Delete ${lead.name}? This removes them from every list.`)) return
     run(() => x('delete_lead', { id: lead.id }).then(() => undefined))
@@ -164,7 +175,13 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
         </div>
       ))}
       {lead && tab === 'conversation' && <Conversation lead={lead} onChanged={() => setSavedInPlace(true)} />}
-      <form onSubmit={save} hidden={tab !== 'details'} className="mt-4 space-y-5">
+      {lead && tab === 'details' && !editing && (
+        <>
+          {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
+          <LeadView lead={lead} lists={lists} onEdit={() => setEditing(true)} />
+        </>
+      )}
+      <form onSubmit={save} hidden={tab !== 'details' || !editing} className="mt-4 space-y-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block sm:col-span-2">
             <span className="text-sm font-medium text-[var(--ink)]">Name</span>
@@ -265,7 +282,10 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
           {lead ? (
             <button type="button" onClick={remove} disabled={saving} className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--error)] hover:bg-[var(--line)]">Delete lead</button>
           ) : <span />}
-          <button type="submit" disabled={saving} className="rounded-xl bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Save</button>
+          <div className="flex gap-2">
+            {lead && <button type="button" onClick={cancelEdit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-semibold text-[var(--muted)] hover:bg-[var(--line)]">Cancel</button>}
+            <button type="submit" disabled={saving} className="rounded-xl bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Save</button>
+          </div>
         </div>
       </form>
     </Modal>
