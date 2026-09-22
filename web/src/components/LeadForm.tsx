@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { q, x } from '../lib/actions'
 import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
 import { SOCIALS, isProfileLink } from '../lib/socials'
-import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Source } from '../types'
+import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Project, type ProjectMember, type Source } from '../types'
 import { Conversation } from './Conversation'
 import { LeadView } from './LeadView'
 import { Modal } from './Modal'
@@ -30,10 +30,15 @@ function toFields(lead: Lead): LeadFields {
   return fields
 }
 
-export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved }: {
+export function LeadForm({ lead, lists, sources, projects, members, userId, defaultListId, onClose, onSaved }: {
   lead: Lead | null
   lists: LeadList[]
   sources: Source[]
+  projects: Project[]
+  /** Members of your projects — the people a lead can be assigned to. */
+  members: ProjectMember[]
+  /** The signed-in user's id. */
+  userId: string
   /** List being browsed when "Add lead" was pressed — preselected for new leads. */
   defaultListId: string | null
   onClose: () => void
@@ -54,6 +59,14 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
   const [attention, setAttention] = useState({ on: Boolean(lead?.needs_attention), reason: lead?.attention_reason ?? null, at: lead?.attention_at ?? null })
   /** updated_at as last read - saving is refused if the lead changed since (e.g. an agent edited it). */
   const [baseUpdatedAt, setBaseUpdatedAt] = useState(lead?.updated_at ?? null)
+  const [assignee, setAssignee] = useState(lead?.assigned_to_user_id ?? null)
+  const [status, setStatus] = useState(lead?.status ?? 'new')
+  // Someone else's lead assigned to you: status, flag and new messages only.
+  const shared = Boolean(lead?.shared)
+  const sharedIn = shared ? projects.find((p) => p.id === lead?.project_id) : undefined
+  // A lead can be assigned to members of the projects its lists belong to.
+  const leadProjects = new Set(memberOf.map((id) => lists.find((l) => l.id === id)?.project_id).filter(Boolean))
+  const assignable = [...new Map(members.filter((m) => leadProjects.has(m.project_id)).map((m) => [m.user_id, m])).values()]
 
   const set = (key: keyof LeadFields, value: string) => setFields((f) => ({ ...f, [key]: value }))
 
@@ -76,27 +89,34 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
     }
   }
 
-  /** Flag / clear without closing the form, so unsaved edits stay. */
-  async function setFlag(action: 'flag_needs_attention' | 'clear_needs_attention') {
-    if (!lead) return
+  /** Save one change without closing the form, so unsaved edits stay, then re-read the lead. */
+  async function saveInPlace(action: string, params: Record<string, unknown>, refused: string): Promise<boolean> {
+    if (!lead) return false
     setSaving(true)
     try {
-      const { changes } = await x(action, action === 'flag_needs_attention' ? { id: lead.id, reason: attentionReason.trim() } : { id: lead.id })
-      if (changes === 0) throw new Error('Not saved - this lead may have been deleted.')
+      const { changes } = await x(action, { id: lead.id, ...params })
+      if (changes === 0) throw new Error(refused)
       const [fresh] = await q<Lead>('get_lead', { id: lead.id })
       if (fresh) {
         setAttention({ on: Boolean(fresh.needs_attention), reason: fresh.attention_reason, at: fresh.attention_at })
         setBaseUpdatedAt(fresh.updated_at)
+        setAssignee(fresh.assigned_to_user_id)
+        setStatus(fresh.status)
       }
-      setAttentionReason('')
       setSavedInPlace(true)
       setError('')
+      return true
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+      return false
     } finally {
       setSaving(false)
     }
   }
+
+  const setFlag = (action: 'flag_needs_attention' | 'clear_needs_attention') =>
+    saveInPlace(action, action === 'flag_needs_attention' ? { reason: attentionReason.trim() } : {}, 'Not saved - this lead may have been deleted.')
+      .then((saved) => { if (saved) setAttentionReason('') })
 
   function save(e: React.FormEvent) {
     e.preventDefault()
@@ -166,7 +186,7 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
             </div>
             <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink)]">{attention.reason}</p>
           </div>
-          <button type="button" disabled={saving} onClick={() => setFlag('clear_needs_attention')} className="shrink-0 rounded-xl bg-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Mark handled</button>
+          {!shared && <button type="button" disabled={saving} onClick={() => setFlag('clear_needs_attention')} className="shrink-0 rounded-xl bg-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Mark handled</button>}
         </div>
       ) : (
         <div className="mt-4 flex gap-2">
@@ -174,11 +194,37 @@ export function LeadForm({ lead, lists, sources, defaultListId, onClose, onSaved
           <button type="button" disabled={saving || !attentionReason.trim()} onClick={() => setFlag('flag_needs_attention')} className="shrink-0 rounded-xl border border-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--warning)] disabled:opacity-40">Flag</button>
         </div>
       ))}
-      {lead && tab === 'conversation' && <Conversation lead={lead} onChanged={() => setSavedInPlace(true)} />}
+      {lead && (shared ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="text-[var(--muted)]">Assigned to you{sharedIn ? ` in ${sharedIn.name}, shared by ${sharedIn.owner_name ?? 'its owner'}` : ' in a shared project'}</span>
+          <select aria-label="Status" value={status} disabled={saving} onChange={(e) => saveInPlace('set_lead_status', { status: e.target.value }, 'Not saved - this lead is no longer assigned to you.')} className={`${inputClass} mt-0 w-auto capitalize`}>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      ) : (
+        <label className="mt-3 flex items-center gap-3 text-sm">
+          <span className="shrink-0 font-medium text-[var(--ink)]">Assigned to</span>
+          <select
+            value={assignee === userId ? 'me' : assignee ?? ''}
+            disabled={saving}
+            onChange={(e) => saveInPlace('assign_lead', { user_id: e.target.value || null }, 'Not saved - that person is not a member of a project this lead\'s lists belong to.')}
+            className={`${inputClass} mt-0`}
+          >
+            <option value="">Nobody</option>
+            <option value="me">Me</option>
+            {assignable.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name ?? 'Unnamed member'}</option>)}
+            {assignee && assignee !== userId && !assignable.some((m) => m.user_id === assignee) && (
+              <option value={assignee}>{members.find((m) => m.user_id === assignee)?.display_name ?? 'Former member'} (not in this lead's projects)</option>
+            )}
+          </select>
+        </label>
+      ))}
+      {lead && !shared && leadProjects.size === 0 && <p className="mt-1 text-xs text-[var(--muted)]">To assign this lead to someone else, put it in a list of a project they joined.</p>}
+      {lead && tab === 'conversation' && <Conversation lead={lead} readOnlyHistory={shared} onChanged={() => setSavedInPlace(true)} />}
       {lead && tab === 'details' && !editing && (
         <>
           {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
-          <LeadView lead={lead} lists={lists} onEdit={() => setEditing(true)} />
+          <LeadView lead={{ ...lead, status }} lists={lists} onEdit={shared ? undefined : () => setEditing(true)} />
         </>
       )}
       <form onSubmit={save} hidden={tab !== 'details' || !editing} className="mt-4 space-y-5">

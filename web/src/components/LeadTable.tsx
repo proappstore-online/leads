@@ -1,17 +1,25 @@
 import { countryName } from '../lib/countries'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
-import type { Lead, LeadList, Sort, SortKey } from '../types'
+import type { Lead, LeadList, Project, Sort, SortKey } from '../types'
 
 const linkClass = 'text-[var(--sky-deep)] underline-offset-4 hover:underline'
 
-export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
+export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen }: {
   leads: Lead[]
   lists: LeadList[]
+  projects: Project[]
+  /** Name to show for each user id a lead can be assigned to (you as "Me"). */
+  people: Map<string, string>
   sort: Sort
   onSort: (key: SortKey) => void
   onOpen: (lead: Lead) => void
 }) {
   const listNames = new Map(lists.map((l) => [l.id, l.name]))
+  const projectsById = new Map(projects.map((p) => [p.id, p]))
+  const sharedVia = (lead: Lead) => {
+    const p = lead.project_id ? projectsById.get(lead.project_id) : undefined
+    return p ? `Shared · ${p.name} · ${p.owner_name ?? 'owner'}` : 'Shared'
+  }
 
   const sortable = (key: SortKey, label: string, className = '') => (
     <th aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined} className={`px-4 py-3 font-semibold ${className}`}>
@@ -31,6 +39,7 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
             {sortable('email', 'Contact')}
             <th className="hidden px-4 py-3 font-semibold md:table-cell">Profiles</th>
             <th className="hidden px-4 py-3 font-semibold lg:table-cell">Lists</th>
+            <th className="hidden px-4 py-3 font-semibold md:table-cell">Assigned</th>
             {sortable('fit', 'Fit')}
             {sortable('last_contact', 'Last contact', 'hidden sm:table-cell')}
             {sortable('last_reply', 'Last reply', 'hidden sm:table-cell')}
@@ -45,6 +54,7 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
                   {lead.name}
                   {lead.needs_attention ? <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--paper)]">Needs attention</span> : null}
                 </div>
+                {lead.shared ? <div className="text-xs font-medium text-[var(--accent-deep)]">{sharedVia(lead)}</div> : null}
                 {lead.needs_attention && lead.attention_reason ? <div className="text-xs font-medium text-[var(--warning)]">{lead.attention_reason}</div> : null}
                 <div className="text-xs text-[var(--muted)]">
                   {[lead.title, lead.company, lead.location].filter(Boolean).join(' · ')}
@@ -85,6 +95,9 @@ export function LeadTable({ leads, lists, sort, onSort, onOpen }: {
                     <span key={id} className="rounded-full bg-[var(--line)] px-2 py-0.5 text-xs text-[var(--muted)]">{listNames.get(id)}</span>
                   ))}
                 </div>
+              </td>
+              <td className="hidden px-4 py-3 text-xs text-[var(--ink)] md:table-cell">
+                {lead.assigned_to_user_id ? people.get(lead.assigned_to_user_id) ?? 'Former member' : <span className="text-[var(--muted)]">—</span>}
               </td>
               <td className={`px-4 py-3 text-xs font-semibold capitalize ${lead.fit === 'high' ? 'text-[var(--success)]' : lead.fit === 'low' ? 'text-[var(--muted)]' : 'text-[var(--ink)]'}`}>{lead.fit ?? '—'}</td>
               <td className="hidden px-4 py-3 text-xs text-[var(--muted)] sm:table-cell">

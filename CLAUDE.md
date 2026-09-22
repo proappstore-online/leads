@@ -43,8 +43,16 @@ Platform conventions: https://proappstore.online/skills.md
   leads from before 0007 stay editable. The 249 codes live in `mcp.json` and
   `web/src/lib/countries.ts` — keep them in step.
 - `messages.seq` keeps thread order when several messages share a timestamp.
+- `projects` group lists (`lists.project_id`, null = no project). `project_members` join through
+  single-use invite codes (`project_invites`, link `?join=<code>`, 7 days). `leads.assigned_to_user_id`
+  is the owner or a member of a project that one of the lead's lists belongs to (`assign_lead`
+  checks it; actions that remove that path unassign).
 
-Every row carries `user_id`; each signed-in user sees only their own database.
+Every row carries `user_id`; each signed-in user sees only their own database. One exception: a
+project member reaches a lead assigned to them while it is in a list of a project they belong to -
+`get_lead`, `list_assigned_leads`, `set_lead_status`, `flag_needs_attention` and the message
+read/add actions (their messages are stored under the owner's `user_id`). Every other action stays
+owner-only.
 
 ## Data access
 

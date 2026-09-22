@@ -20,7 +20,7 @@ function External({ href, children }: { href: string; children: ReactNode }) {
 }
 
 /** Read-only lead: every filled field, with contact details and links clickable. Empty fields are left out. */
-export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[]; onEdit: () => void }) {
+export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[]; onEdit?: () => void }) {
   const listNames = (lead.list_ids?.split(',') ?? []).map((id) => lists.find((l) => l.id === id)?.name).filter(Boolean)
   const profiles = SOCIALS.filter(({ key }) => lead[key])
 
@@ -35,7 +35,7 @@ export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[
             {listNames.map((n) => <span key={n} className="rounded-full border border-[var(--line-strong)] px-2 py-0.5 text-[var(--muted)]">{n}</span>)}
           </p>
         </div>
-        <button type="button" onClick={onEdit} className="shrink-0 rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--line)]">Edit</button>
+        {onEdit && <button type="button" onClick={onEdit} className="shrink-0 rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--line)]">Edit</button>}
       </div>
 
       <dl className="mt-4 divide-y divide-[var(--line)] border-y border-[var(--line)]">

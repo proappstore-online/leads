@@ -4,10 +4,12 @@ import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { COUNTRY_OPTIONS, countryName } from './lib/countries'
 import { q } from './lib/actions'
-import { FITS, STATUSES, type Lead, type LeadList, type Sort, type SortKey, type Source, type SourceSort } from './types'
+import { FITS, STATUSES, type Lead, type LeadList, type Project, type ProjectMember, type Sort, type SortKey, type Source, type SourceSort } from './types'
+import { JoinProject } from './components/JoinProject'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
+import { ProjectForm } from './components/ProjectForm'
 import { SourceDetails } from './components/SourceDetails'
 import { SourceForm } from './components/SourceForm'
 import { SourcesTable } from './components/SourcesTable'
@@ -16,6 +18,14 @@ import { SignIn } from './components/SignIn'
 
 const PAGE = 200
 
+const JOIN_KEY = 'leads.join'
+// An invite link (?join=<code>) is kept through sign-in and offered once the user is in.
+const joinParam = new URLSearchParams(location.search).get('join')
+if (joinParam) {
+  localStorage.setItem(JOIN_KEY, joinParam)
+  history.replaceState(null, '', location.pathname + location.hash)
+}
+
 export default function App() {
   const { user, loading } = useProAuth(app)
   // ProShell's own signed-out gate is GitHub-only; ours offers Google too.
@@ -23,16 +33,27 @@ export default function App() {
 
   return (
     <ProShell app={app} appName="Leads">
-      <Home />
+      <Home userId={user?.id ?? ''} userName={user?.name ?? ''} />
     </ProShell>
   )
 }
 
-function Home() {
+function Home({ userId, userName }: { userId: string; userName: string }) {
   const [lists, setLists] = useState<LeadList[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  /** Everyone who joined one of your projects. */
+  const [members, setMembers] = useState<ProjectMember[]>([])
   const [total, setTotal] = useState(0)
   const [attentionCount, setAttentionCount] = useState(0)
   const [attentionOnly, setAttentionOnly] = useState(false)
+  const [assignedCount, setAssignedCount] = useState(0)
+  /** Leads assigned to you — your own and those shared with you. */
+  const [assignedOnly, setAssignedOnly] = useState(false)
+  const [projectId, setProjectId] = useState<string | null>(null)
+  /** '' = anyone, 'none' = nobody, 'me', otherwise a member's user id. */
+  const [assignedTo, setAssignedTo] = useState('')
+  const [editingProject, setEditingProject] = useState<Project | 'new' | null>(null)
+  const [joinCode, setJoinCode] = useState(() => localStorage.getItem(JOIN_KEY))
   const [view, setView] = useState<'leads' | 'sources' | 'stats'>('leads')
   const [sources, setSources] = useState<Source[]>([])
   const [noSource, setNoSource] = useState(0)
@@ -60,11 +81,19 @@ function Home() {
 
   const loadLists = useCallback(async () => {
     try {
-      const [rows, count] = await Promise.all([q<LeadList>('list_lists'), q<{ total: number; needs_attention: number; no_source: number }>('count_leads')])
+      const [rows, count, projectRows, memberRows] = await Promise.all([
+        q<LeadList>('list_lists'),
+        q<{ total: number; needs_attention: number; no_source: number; assigned_to_me: number }>('count_leads'),
+        q<Project>('list_projects'),
+        q<ProjectMember>('list_project_members'),
+      ])
       setLists(rows)
+      setProjects(projectRows)
+      setMembers(memberRows)
       setTotal(count[0]?.total ?? 0)
       setAttentionCount(count[0]?.needs_attention ?? 0)
       setNoSource(count[0]?.no_source ?? 0)
+      setAssignedCount(count[0]?.assigned_to_me ?? 0)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -85,7 +114,9 @@ function Home() {
     const id = ++request.current
     setLoading(true)
     try {
-      const rows = await q<Lead>('list_leads', { list_id: listId, status: status || null, fit: fit || null, country: country || null, needs_attention: attentionOnly || null, source_id: sourceId || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
+      const rows = assignedOnly
+        ? await q<Lead>('list_assigned_leads', { status: status || null, q: search.trim() || null, limit: PAGE, offset })
+        : await q<Lead>('list_leads', { list_id: listId, project_id: projectId, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null, needs_attention: attentionOnly || null, source_id: sourceId || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
       setHasMore(rows.length === PAGE)
@@ -95,7 +126,7 @@ function Home() {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [listId, status, fit, country, attentionOnly, sourceId, search, sort])
+  }, [assignedOnly, listId, projectId, assignedTo, status, fit, country, attentionOnly, sourceId, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
   useEffect(() => { loadSources() }, [loadSources])
@@ -123,12 +154,24 @@ function Home() {
     }
   }
 
+  /** Show the leads table for one scope: a list, a project, flagged or assigned leads — or all leads. */
+  function browse(scope: { listId?: string; projectId?: string; attention?: boolean; assigned?: boolean }) {
+    setView('leads')
+    setListId(scope.listId ?? null)
+    setProjectId(scope.projectId ?? null)
+    setAttentionOnly(Boolean(scope.attention))
+    setAssignedOnly(Boolean(scope.assigned))
+  }
+
   function showSourceLeads(id: string) {
     setViewingSourceId(null)
-    setView('leads')
-    setListId(null)
-    setAttentionOnly(false)
+    browse({})
     setSourceId(id)
+  }
+
+  function closeJoin() {
+    localStorage.removeItem(JOIN_KEY)
+    setJoinCode(null)
   }
 
   function refresh() {
@@ -139,27 +182,57 @@ function Home() {
   }
 
   const current = lists.find((l) => l.id === listId) ?? null
+  const ownProjects = projects.filter((p) => p.is_owner)
+  const sharedProjects = projects.filter((p) => !p.is_owner)
+  const currentProject = ownProjects.find((p) => p.id === projectId) ?? null
+  const looseLists = lists.filter((l) => !ownProjects.some((p) => p.id === l.project_id))
+  // Names for the Assigned column, filter and form: members of your projects, and you.
+  const people = new Map(members.map((m) => [m.user_id, m.display_name ?? 'Unnamed member']))
+  people.set(userId, 'Me')
+  const assignees = [...new Map(members.map((m) => [m.user_id, m])).values()]
   const chip = (active: boolean) =>
     `flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold ${active ? 'bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'text-[var(--ink)] hover:bg-[var(--line)]'}`
+  const listChip = (list: LeadList, nested = false) => (
+    <button key={list.id} type="button" onClick={() => browse({ listId: list.id })} title={list.purpose ?? undefined} className={`${chip(view === 'leads' && listId === list.id)} ${nested ? 'lg:ml-4' : ''}`}>
+      <span className="truncate">{list.name}</span>
+      <span className="text-xs font-medium text-[var(--muted)]">{list.lead_count}</span>
+    </button>
+  )
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
       <nav aria-label="Lead lists" className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
-        <button type="button" onClick={() => { setView('leads'); setListId(null); setAttentionOnly(false); setSourceId('') }} className={chip(view === 'leads' && listId === null && !attentionOnly)}>
+        <button type="button" onClick={() => { browse({}); setSourceId('') }} className={chip(view === 'leads' && listId === null && projectId === null && !attentionOnly && !assignedOnly)}>
           <span>All leads</span>
           <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
         </button>
-        <button type="button" onClick={() => { setView('leads'); setListId(null); setAttentionOnly(true) }} className={chip(view === 'leads' && attentionOnly)}>
+        <button type="button" onClick={() => browse({ attention: true })} className={chip(view === 'leads' && attentionOnly)}>
           <span className={attentionCount > 0 ? 'text-[var(--warning)]' : undefined}>Needs attention</span>
           <span className={`rounded-full px-2 text-xs font-bold ${attentionCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{attentionCount}</span>
         </button>
-        {lists.map((list) => (
-          <button key={list.id} type="button" onClick={() => { setView('leads'); setListId(list.id); setAttentionOnly(false) }} title={list.purpose ?? undefined} className={chip(view === 'leads' && listId === list.id)}>
-            <span className="truncate">{list.name}</span>
-            <span className="text-xs font-medium text-[var(--muted)]">{list.lead_count}</span>
+        <button type="button" onClick={() => browse({ assigned: true })} className={chip(view === 'leads' && assignedOnly)}>
+          <span>Assigned to me</span>
+          <span className="text-xs font-medium text-[var(--muted)]">{assignedCount}</span>
+        </button>
+        {ownProjects.map((project) => (
+          <div key={project.id} className="contents">
+            <button type="button" onClick={() => browse({ projectId: project.id })} title={project.description ?? undefined} className={chip(view === 'leads' && projectId === project.id)}>
+              <span className="truncate">{project.name}</span>
+              <span className="text-xs font-medium text-[var(--muted)]">{project.member_count ? `${project.member_count} ${project.member_count === 1 ? 'member' : 'members'}` : 'project'}</span>
+            </button>
+            {lists.filter((l) => l.project_id === project.id).map((l) => listChip(l, true))}
+          </div>
+        ))}
+        {looseLists.map((l) => listChip(l))}
+        <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New list</button>
+        <button type="button" onClick={() => setEditingProject('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New project</button>
+        {sharedProjects.length > 0 && <div className="hidden px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] lg:block">Shared with me</div>}
+        {sharedProjects.map((project) => (
+          <button key={project.id} type="button" onClick={() => setEditingProject(project)} className={chip(false)}>
+            <span className="truncate">{project.name}</span>
+            <span className="truncate text-xs font-medium text-[var(--muted)]">{project.owner_name ?? 'shared'}</span>
           </button>
         ))}
-        <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New list</button>
         <div className="hidden border-t border-[var(--line)] lg:my-2 lg:block" />
         <button type="button" onClick={() => setView('stats')} className={chip(view === 'stats')}>
           <span>Stats</span>
@@ -205,12 +278,16 @@ function Home() {
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : current?.name ?? 'All leads'}</h1>
-            {current?.purpose && <p className="mt-0.5 text-sm text-[var(--muted)]">{current.purpose}</p>}
+            <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : assignedOnly ? 'Assigned to me' : current?.name ?? currentProject?.name ?? 'All leads'}</h1>
+            {(current?.purpose || currentProject?.description) && <p className="mt-0.5 text-sm text-[var(--muted)]">{current?.purpose ?? currentProject?.description}</p>}
+            {assignedOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Your own leads assigned to you, and leads shared with you through projects you joined.</p>}
           </div>
           <div className="flex gap-2">
             {current && (
               <button type="button" onClick={() => setEditingList(current)} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">Edit list</button>
+            )}
+            {currentProject && (
+              <button type="button" onClick={() => setEditingProject(currentProject)} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">Manage project</button>
             )}
             <button type="button" onClick={() => setEditingLead('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)]">Add lead</button>
           </div>
@@ -233,6 +310,18 @@ function Home() {
           >
             <option value="">Any status</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {!assignedOnly && <>
+          <select
+            aria-label="Filter by assignee"
+            value={assignedTo}
+            onChange={(e) => setAssignedTo(e.target.value)}
+            className="max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+          >
+            <option value="">Anyone</option>
+            <option value="none">Not assigned</option>
+            <option value="me">Assigned to me</option>
+            {assignees.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name ?? 'Unnamed member'}</option>)}
           </select>
           <select
             aria-label="Filter by fit"
@@ -263,16 +352,17 @@ function Home() {
             <option value="none">No source</option>
             {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+          </>}
         </div>
 
         {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
 
         <div className="mt-4">
           {leads.length > 0 ? (
-            <LeadTable leads={leads} lists={lists} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
+            <LeadTable leads={leads} lists={lists} projects={projects} people={people} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
-              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : search || status || fit || country || sourceId ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : 'No leads yet. Add your first one.'}
+              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : currentProject ? 'No leads in this project\'s lists yet.' : 'No leads yet. Add your first one.'}
             </p>
           )}
           {hasMore && (
@@ -300,6 +390,9 @@ function Home() {
           lead={editingLead === 'new' ? null : editingLead}
           lists={lists}
           sources={sources}
+          projects={projects}
+          members={members}
+          userId={userId}
           defaultListId={listId}
           onClose={() => setEditingLead(null)}
           onSaved={() => { setEditingLead(null); refresh() }}
@@ -320,9 +413,29 @@ function Home() {
       {editingList && (
         <ListForm
           list={editingList === 'new' ? null : editingList}
+          projects={ownProjects}
+          defaultProjectId={projectId}
           onClose={() => setEditingList(null)}
-          onSaved={(id) => { setEditingList(null); setListId(id); refresh() }}
-          onDeleted={() => { setEditingList(null); setListId(null); refresh() }}
+          onSaved={(id) => { setEditingList(null); browse({ listId: id }); refresh() }}
+          onDeleted={() => { setEditingList(null); browse({}); refresh() }}
+        />
+      )}
+      {editingProject && (
+        <ProjectForm
+          project={editingProject === 'new' ? null : editingProject}
+          ownerName={userName}
+          onClose={() => setEditingProject(null)}
+          onSaved={(id) => { setEditingProject(null); browse({ projectId: id }); refresh() }}
+          onDeleted={() => { setEditingProject(null); browse({}); refresh() }}
+          onChanged={refresh}
+        />
+      )}
+      {joinCode && (
+        <JoinProject
+          code={joinCode}
+          userName={userName}
+          onClose={closeJoin}
+          onJoined={() => { closeJoin(); browse({ assigned: true }); refresh() }}
         />
       )}
     </div>

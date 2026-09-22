@@ -1,18 +1,23 @@
 import { useState } from 'react'
 import { x } from '../lib/actions'
-import type { LeadList } from '../types'
+import type { LeadList, Project } from '../types'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
 
 
-export function ListForm({ list, onClose, onSaved, onDeleted }: {
+export function ListForm({ list, projects, defaultProjectId, onClose, onSaved, onDeleted }: {
   list: LeadList | null
+  /** Your own projects — a list can belong to one. */
+  projects: Project[]
+  /** Project being browsed when "New list" was pressed — preselected for a new list. */
+  defaultProjectId: string | null
   onClose: () => void
   onSaved: (id: string) => void
   onDeleted: (id: string) => void
 }) {
   const [name, setName] = useState(list?.name ?? '')
   const [purpose, setPurpose] = useState(list?.purpose ?? '')
+  const [projectId, setProjectId] = useState(list ? list.project_id ?? '' : defaultProjectId ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -30,7 +35,13 @@ export function ListForm({ list, onClose, onSaved, onDeleted }: {
     e.preventDefault()
     const id = list?.id ?? crypto.randomUUID()
     run(async () => {
-      await x(list ? 'update_list' : 'create_list', { id, name: name.trim(), purpose: purpose.trim() || null })
+      const fields = { id, name: name.trim(), purpose: purpose.trim() || null }
+      if (list) {
+        await x('update_list', fields)
+        if (projectId !== (list.project_id ?? '')) await x('set_list_project', { id, project_id: projectId || null })
+      } else {
+        await x('create_list', { ...fields, project_id: projectId || null })
+      }
       onSaved(id)
     })
   }
@@ -54,6 +65,15 @@ export function ListForm({ list, onClose, onSaved, onDeleted }: {
           <span className="text-sm font-medium text-[var(--ink)]">Purpose</span>
           <input type="text" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="What is this list for?" className={inputClass} />
         </label>
+        {projects.length > 0 && (
+          <label className="block">
+            <span className="text-sm font-medium text-[var(--ink)]">Project</span>
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inputClass}>
+              <option value="">No project</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+        )}
         {error && <p className="text-sm text-[var(--error)]">{error}</p>}
         <div className="flex items-center justify-between pt-2">
           {list ? (

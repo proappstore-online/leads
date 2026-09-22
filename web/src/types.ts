@@ -59,6 +59,12 @@ export type Lead = { [K in keyof LeadFields]: LeadFields[K] | null } & {
   attention_at: number | null
   /** When the lead was found (epoch ms) — set by agents, never cleared by the form. */
   found_at: number | null
+  /** Who works the lead: the owner or a member of one of its lists' projects. Null when nobody. */
+  assigned_to_user_id: string | null
+  /** 1 when the lead belongs to someone else and is assigned to you through a project you joined. */
+  shared?: number
+  /** From list_assigned_leads: the project the lead is reached through. */
+  project_id?: string | null
   created_at: number
   updated_at: number
 }
@@ -67,6 +73,7 @@ export interface LeadList {
   id: string
   name: string
   purpose: string | null
+  project_id: string | null
   lead_count: number
   created_at: number
 }
@@ -120,4 +127,25 @@ export interface SourceDetail extends Source {
   status_lost: number
   first_found_at: number | null
   last_contact_at: number | null
+}
+
+/** A group of related lists, as list_projects returns it — yours (is_owner 1) or one you joined. */
+export interface Project {
+  id: string
+  name: string
+  description: string | null
+  /** The owner's name as they gave it, shown to members. */
+  owner_name: string | null
+  created_at: number
+  is_owner: number
+  /** Null for projects you joined. */
+  member_count: number | null
+}
+
+/** Someone who joined one of your projects. */
+export interface ProjectMember {
+  project_id: string
+  user_id: string
+  display_name: string | null
+  joined_at: number
 }

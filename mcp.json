@@ -5,22 +5,28 @@
       "operation": "query",
       "requires_auth": true,
       "description": "READ THIS FIRST. The conventions of this lead database - which field holds what, the links-only rule, allowed values, and which tool to use for each job.",
-      "sql": "SELECT j.key + 1 AS step, json_extract(j.value, '$[0]') AS topic, json_extract(j.value, '$[1]') AS guidance FROM json_each('[[\"start here\", \"This is one person''s lead database. Leads are people. Lists are categories of leads, one list per purpose or role, and a lead can be in many lists. Every lead can have a recorded conversation.\"], [\"adding a lead\", \"1) find_lead with the profile URL or email to see if the person already exists. 2) list_sources with q to find the group, page or event where you found them - if it is missing, add it with create_source. 3) Confirm the country the person is in. 4) create_lead with a new random UUID, that source_id and the country. 5) add_lead_to_list. If changes is 0 nothing was saved - read the create_lead description for why.\"], [\"links only\", \"linkedin, twitter, instagram, facebook, tiktok, youtube, github and source_url hold full https links only, never a name or handle. Unknown means null. check_lead_links explains a rejection.\"], [\"which field\", \"name is the person. title is their job or the role they want. company is their employer, never the group where you found them. source_id points to the source (the group, page or event) and source_url is the link to the exact post or comment. fit is high, med or low. Do not put fit, HOT flags or found-times into title or notes - use fit and found_at.\"], [\"country\", \"Every lead needs a confirmed country - create_lead refuses a lead without one. Use the 2-letter ISO code (AU, NZ, GB, US). Confirmed means the person''s profile, post or conversation shows where they are. Do not guess from the group''s name, the city a group is about, or the language they write in - if it is not clear, do not add the lead yet. location holds the city or area in words. The country can be changed later but not removed.\"], [\"sources\", \"A source is a place leads come from - a Facebook group, page, event, website. Each source is one row with a name, a kind, an https link to the group itself and notes. Name it as it appears there, without a ''Facebook group:'' prefix - that is kind. A lead has one source, the place you first found them. list_sources shows how every source performs. Use assign_leads_to_source to set the source of many leads at once.\"], [\"changing a lead\", \"Use enrich_lead to add or fix fields - it touches only what you pass and by default fills only empty fields. Use set_lead_status for the stage. Avoid update_lead - it is a full replace and clears every field you leave out.\"], [\"status\", \"new = not contacted yet. contacted = the user wrote and has no answer. replied = the lead answered. qualified, won, lost are decided by the user. Keep status in step with the recorded conversation.\"], [\"needs attention\", \"When you should not or cannot continue on your own - a question only the owner can answer, a request for a call, a lead ready to commit, an upset lead, a suspected duplicate, or any doubt - call flag_needs_attention with a short reason and stop working on that lead. It is separate from status. The owner clears the mark in the app.\"], [\"conversations\", \"Use add_messages to record a thread in one call - it keeps order and skips messages already stored, so it is safe to repeat. direction out = sent by the user, in = sent by the lead. occurred_at is the real send time of EACH message in epoch milliseconds, not the time you logged it and not one time for the whole thread.\"], [\"platforms\", \"Allowed platform values - LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other.\"], [\"reading\", \"list_leads filters by list_id, status, fit and q (search) and sorts by name, email, status, fit, last_contact, last_reply, found or created. get_lead reads one lead. list_messages reads a conversation oldest first. list_sources gives leads, contacted, replied, reply rate, won and high-fit counts per source, and get_source gives one source in full, including a count per status, and list_leads with source_id shows its leads. update_source changes a source.\"], [\"reporting\", \"recent_activity lists what happened, newest first - leads added and updated, messages recorded, leads flagged, sources added. stats_timeline counts leads added, messages sent and received, replies, sources added and flags per time bucket. stats_pipeline shows how many leads sit at each status and fit right now. All three can be narrowed to one source, and the two stats tools to one list.\"]]') AS j WHERE :__user_id IS NOT NULL ORDER BY j.key",
+      "sql": "SELECT j.key + 1 AS step, json_extract(j.value, '$[0]') AS topic, json_extract(j.value, '$[1]') AS guidance FROM json_each('[[\"start here\", \"This is one person''s lead database, which the owner can share with a team through projects. Leads are people. Lists are categories of leads, one list per purpose or role, and a lead can be in many lists. Every lead can have a recorded conversation.\"], [\"adding a lead\", \"1) find_lead with the profile URL or email to see if the person already exists. 2) list_sources with q to find the group, page or event where you found them - if it is missing, add it with create_source. 3) Confirm the country the person is in. 4) create_lead with a new random UUID, that source_id and the country. 5) add_lead_to_list. If changes is 0 nothing was saved - read the create_lead description for why.\"], [\"links only\", \"linkedin, twitter, instagram, facebook, tiktok, youtube, github and source_url hold full https links only, never a name or handle. Unknown means null. check_lead_links explains a rejection.\"], [\"which field\", \"name is the person. title is their job or the role they want. company is their employer, never the group where you found them. source_id points to the source (the group, page or event) and source_url is the link to the exact post or comment. fit is high, med or low. Do not put fit, HOT flags or found-times into title or notes - use fit and found_at.\"], [\"country\", \"Every lead needs a confirmed country - create_lead refuses a lead without one. Use the 2-letter ISO code (AU, NZ, GB, US). Confirmed means the person''s profile, post or conversation shows where they are. Do not guess from the group''s name, the city a group is about, or the language they write in - if it is not clear, do not add the lead yet. location holds the city or area in words. The country can be changed later but not removed.\"], [\"sources\", \"A source is a place leads come from - a Facebook group, page, event, website. Each source is one row with a name, a kind, an https link to the group itself and notes. Name it as it appears there, without a ''Facebook group:'' prefix - that is kind. A lead has one source, the place you first found them. list_sources shows how every source performs. Use assign_leads_to_source to set the source of many leads at once.\"], [\"changing a lead\", \"Use enrich_lead to add or fix fields - it touches only what you pass and by default fills only empty fields. Use set_lead_status for the stage. Avoid update_lead - it is a full replace and clears every field you leave out.\"], [\"status\", \"new = not contacted yet. contacted = the user wrote and has no answer. replied = the lead answered. qualified, won, lost are decided by the user. Keep status in step with the recorded conversation.\"], [\"needs attention\", \"When you should not or cannot continue on your own - a question only the owner can answer, a request for a call, a lead ready to commit, an upset lead, a suspected duplicate, or any doubt - call flag_needs_attention with a short reason and stop working on that lead. It is separate from status. The owner clears the mark in the app.\"], [\"conversations\", \"Use add_messages to record a thread in one call - it keeps order and skips messages already stored, so it is safe to repeat. direction out = sent by the user, in = sent by the lead. occurred_at is the real send time of EACH message in epoch milliseconds, not the time you logged it and not one time for the whole thread.\"], [\"platforms\", \"Allowed platform values - LinkedIn, Email, X, Instagram, Facebook, Messenger, TikTok, YouTube, WhatsApp, Telegram, SMS, Phone call, In person, Other.\"], [\"reading\", \"list_leads filters by list_id, project_id, assigned_to, status, fit and q (search) and sorts by name, email, status, fit, last_contact, last_reply, found or created. get_lead reads one lead. list_messages reads a conversation oldest first. list_sources gives leads, contacted, replied, reply rate, won and high-fit counts per source, and get_source gives one source in full, including a count per status, and list_leads with source_id shows its leads. update_source changes a source.\"], [\"reporting\", \"recent_activity lists what happened, newest first - leads added and updated, messages recorded, leads flagged, sources added. stats_timeline counts leads added, messages sent and received, replies, sources added and flags per time bucket. stats_pipeline shows how many leads sit at each status and fit right now. All three can be narrowed to one source, and the two stats tools to one list.\"], [\"projects and team\", \"A project groups related lists (list_projects, create_project, update_project, delete_project). A list belongs to at most one project - create_list takes project_id and set_list_project moves a list. The owner invites people with create_project_invite; they open the link and join. assign_lead gives a lead to a member of a project whose list holds the lead, or to the owner with user_id me. A member only sees the leads assigned to them (list_assigned_leads, get_lead) and can read and record their conversation, set their status and flag them for the owner. Only the owner edits other fields, deletes leads, assigns them and manages projects.\"]]') AS j WHERE :__user_id IS NOT NULL ORDER BY j.key",
       "params": {}
     },
     {
       "name": "list_lists",
-      "description": "List the signed-in user's lead lists with the number of leads in each",
+      "description": "List the signed-in user's lead lists with the number of leads in each and the project each belongs to (project_id, null when none)",
       "operation": "query",
-      "sql": "SELECT li.id, li.name, li.purpose, li.created_at, (SELECT COUNT(*) FROM lead_lists ll WHERE ll.list_id = li.id) AS lead_count FROM lists li WHERE li.user_id = :__user_id ORDER BY li.name COLLATE NOCASE LIMIT 500",
-      "params": {},
+      "sql": "SELECT li.id, li.name, li.purpose, li.project_id, li.created_at, (SELECT COUNT(*) FROM lead_lists ll WHERE ll.list_id = li.id) AS lead_count FROM lists li WHERE li.user_id = :__user_id AND (:project_id IS NULL OR li.project_id = :project_id OR (:project_id = 'none' AND li.project_id IS NULL)) ORDER BY li.name COLLATE NOCASE LIMIT 500",
+      "params": {
+        "project_id": {
+          "type": "string",
+          "description": "Only lists in this project. 'none' = lists in no project",
+          "optional": true
+        }
+      },
       "requires_auth": true
     },
     {
       "name": "create_list",
-      "description": "Create a lead list (a category of leads for one purpose or role)",
+      "description": "Create a lead list (a category of leads for one purpose or role), optionally inside one of your projects. \"changes\": 0 means the project is not yours",
       "operation": "execute",
-      "sql": "INSERT INTO lists (id, user_id, name, purpose, created_at) VALUES (:id, :__user_id, :name, :purpose, :__now)",
+      "sql": "INSERT INTO lists (id, user_id, name, purpose, project_id, created_at) SELECT :id, :__user_id, :name, :purpose, :project_id, :__now WHERE :project_id IS NULL OR EXISTS (SELECT 1 FROM projects p WHERE p.id = :project_id AND p.user_id = :__user_id)",
       "params": {
         "id": {
           "type": "string",
@@ -34,6 +40,11 @@
           "type": "string",
           "optional": true,
           "description": "What this list is for"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Project the list belongs to (from list_projects)",
+          "optional": true
         }
       },
       "requires_auth": true
@@ -66,7 +77,8 @@
       "operation": "batch",
       "statements": [
         "DELETE FROM lead_lists WHERE list_id = :id AND user_id = :__user_id",
-        "DELETE FROM lists WHERE id = :id AND user_id = :__user_id"
+        "DELETE FROM lists WHERE id = :id AND user_id = :__user_id",
+        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
       ],
       "params": {
         "id": {
@@ -77,15 +89,245 @@
       "requires_auth": true
     },
     {
-      "name": "list_leads",
-      "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term, and sorted. list_ids is a comma-separated string of the lists each lead belongs to. last_message_at is the time of the most recent recorded message (epoch ms), null if none; last_reply_at is the time of the lead's most recent message to the user (direction 'in'), null if they never replied. needs_attention is 1 when the lead is flagged for the owner, with attention_reason and attention_at. Leads that need attention are always listed first, then the chosen sort applies. source_name / source_kind / source_link describe the lead's source",
+      "name": "list_projects",
       "operation": "query",
-      "sql": "SELECT l.*, (SELECT s.name FROM sources s WHERE s.id = l.source_id) AS source_name, (SELECT s.kind FROM sources s WHERE s.id = l.source_id) AS source_kind, (SELECT s.url FROM sources s WHERE s.id = l.source_id) AS source_link, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:status IS NULL OR l.status = :status) AND (:fit IS NULL OR l.fit = :fit) AND (:country IS NULL OR l.country = upper(:country) OR (:country = 'none' AND l.country IS NULL)) AND (:source_id IS NULL OR l.source_id = :source_id OR (:source_id = 'none' AND l.source_id IS NULL)) AND (:needs_attention IS NULL OR l.needs_attention = :needs_attention) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR (SELECT s.name FROM sources s WHERE s.id = l.source_id) LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY l.needs_attention DESC, CASE WHEN :dir = 'desc' THEN NULL ELSE CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'attention' THEN l.attention_at WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE ASC NULLS LAST, CASE WHEN :dir = 'desc' THEN CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'attention' THEN l.attention_at WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE DESC NULLS LAST, l.name COLLATE NOCASE, l.id LIMIT :limit OFFSET :offset",
+      "requires_auth": true,
+      "description": "Projects the signed-in user owns (is_owner 1, with member_count) and projects they were invited to (is_owner 0, owner_name is who shared it). A project groups related lists",
+      "sql": "SELECT p.id, p.name, p.description, p.owner_name, p.created_at, 1 AS is_owner, (SELECT COUNT(*) FROM project_members pm WHERE pm.project_id = p.id) AS member_count FROM projects p WHERE p.user_id = :__user_id UNION ALL SELECT p.id, p.name, p.description, p.owner_name, p.created_at, 0 AS is_owner, NULL AS member_count FROM projects p JOIN project_members m ON m.project_id = p.id WHERE m.user_id = :__user_id ORDER BY is_owner DESC, name COLLATE NOCASE LIMIT 500",
+      "params": {}
+    },
+    {
+      "name": "create_project",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Create a project - a group of related lists, e.g. one client or initiative. \"changes\": 0 means the name was empty",
+      "sql": "INSERT INTO projects (id, user_id, name, description, owner_name, created_at) SELECT :id, :__user_id, trim(:name), :description, :owner_name, :__now WHERE trim(:name) <> ''",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Client-generated UUID for the project"
+        },
+        "name": {
+          "type": "string",
+          "description": "Project name"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the project is for",
+          "optional": true
+        },
+        "owner_name": {
+          "type": "string",
+          "description": "Your name as project members will see it",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "update_project",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Rename a project or change its description. Owner only. \"changes\": 0 means it is not your project or the name was empty",
+      "sql": "UPDATE projects SET name = trim(:name), description = :description WHERE id = :id AND user_id = :__user_id AND trim(:name) <> ''",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Project ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Project name"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the project is for",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "delete_project",
+      "operation": "batch",
+      "requires_auth": true,
+      "description": "Delete a project. Owner only. Its lists and leads stay (the lists no longer belong to a project); its members and invites are removed, and leads assigned to a member who can no longer reach them are unassigned",
+      "statements": [
+        "UPDATE lists SET project_id = NULL WHERE project_id = :id AND user_id = :__user_id",
+        "DELETE FROM project_invites WHERE project_id IN (SELECT id FROM projects WHERE id = :id AND user_id = :__user_id)",
+        "DELETE FROM project_members WHERE project_id IN (SELECT id FROM projects WHERE id = :id AND user_id = :__user_id)",
+        "DELETE FROM projects WHERE id = :id AND user_id = :__user_id",
+        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
+      ],
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Project ID"
+        }
+      }
+    },
+    {
+      "name": "set_list_project",
+      "operation": "batch",
+      "requires_auth": true,
+      "description": "Put a list in one of your projects, or take it out with project_id null. A list belongs to at most one project. results[0].meta.changes is 0 when the list or project is not yours. Leads assigned to someone who loses access through this are unassigned",
+      "statements": [
+        "UPDATE lists SET project_id = :project_id WHERE id = :id AND user_id = :__user_id AND (:project_id IS NULL OR EXISTS (SELECT 1 FROM projects p WHERE p.id = :project_id AND p.user_id = :__user_id))",
+        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
+      ],
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "List ID"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Project ID, or null for no project",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "list_project_members",
+      "operation": "query",
+      "requires_auth": true,
+      "description": "People who joined your projects (owner only), optionally for one project. user_id is what assign_lead takes",
+      "sql": "SELECT pm.project_id, pm.user_id, pm.display_name, pm.joined_at FROM project_members pm JOIN projects p ON p.id = pm.project_id WHERE p.user_id = :__user_id AND (:project_id IS NULL OR pm.project_id = :project_id) ORDER BY pm.display_name COLLATE NOCASE, pm.joined_at LIMIT 500",
+      "params": {
+        "project_id": {
+          "type": "string",
+          "description": "Only members of this project",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "remove_project_member",
+      "operation": "batch",
+      "requires_auth": true,
+      "description": "Remove someone from your project (owner only). Leads assigned to them that they can no longer reach are unassigned",
+      "statements": [
+        "DELETE FROM project_members WHERE project_id = :project_id AND user_id = :user_id AND project_id IN (SELECT id FROM projects WHERE user_id = :__user_id)",
+        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
+      ],
+      "params": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Member user ID from list_project_members"
+        }
+      }
+    },
+    {
+      "name": "leave_project",
+      "operation": "batch",
+      "requires_auth": true,
+      "description": "Leave a project you were invited to. Leads assigned to you that you can no longer reach are unassigned",
+      "statements": [
+        "DELETE FROM project_members WHERE project_id = :project_id AND user_id = :__user_id",
+        "UPDATE leads SET assigned_to_user_id = NULL WHERE assigned_to_user_id = :__user_id AND user_id <> :__user_id AND user_id IN (SELECT user_id FROM projects WHERE id = :project_id) AND NOT EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = leads.id)"
+      ],
+      "params": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID"
+        }
+      }
+    },
+    {
+      "name": "create_project_invite",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Create a single-use invite code for your project (owner only). It is random, expires after 7 days and is read back with list_project_invites. Share the link https://leads.proappstore.online/?join=<code>",
+      "sql": "INSERT INTO project_invites (code, project_id, created_by, expires_at, created_at) SELECT lower(hex(randomblob(16))), p.id, :__user_id, :__now + 604800000, :__now FROM projects p WHERE p.id = :project_id AND p.user_id = :__user_id",
+      "params": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID"
+        }
+      }
+    },
+    {
+      "name": "list_project_invites",
+      "operation": "query",
+      "requires_auth": true,
+      "description": "Open (unused, unexpired) invites of your project (owner only)",
+      "sql": "SELECT i.code, i.project_id, i.expires_at, i.created_at FROM project_invites i JOIN projects p ON p.id = i.project_id WHERE i.project_id = :project_id AND p.user_id = :__user_id AND i.expires_at > :__now ORDER BY i.created_at DESC LIMIT 100",
+      "params": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID"
+        }
+      }
+    },
+    {
+      "name": "revoke_project_invite",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Cancel an open invite of your project (owner only)",
+      "sql": "DELETE FROM project_invites WHERE code = :code AND project_id IN (SELECT id FROM projects WHERE user_id = :__user_id)",
+      "params": {
+        "code": {
+          "type": "string",
+          "description": "Invite code"
+        }
+      }
+    },
+    {
+      "name": "get_project_invite",
+      "operation": "query",
+      "requires_auth": true,
+      "description": "Look up an invite code before joining: the project name and who shares it. No row means the code is wrong, used or expired",
+      "sql": "SELECT i.code, i.project_id, p.name AS project_name, p.owner_name, i.expires_at, CASE WHEN p.user_id = :__user_id THEN 1 ELSE 0 END AS is_owner, EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND m.user_id = :__user_id) AS is_member FROM project_invites i JOIN projects p ON p.id = i.project_id WHERE i.code = :code AND i.expires_at > :__now",
+      "params": {
+        "code": {
+          "type": "string",
+          "description": "Invite code"
+        }
+      }
+    },
+    {
+      "name": "join_project",
+      "operation": "batch",
+      "requires_auth": true,
+      "description": "Join a project with an invite code. The code is used up. The owner can then assign leads to you, and list_assigned_leads shows them",
+      "statements": [
+        "INSERT OR IGNORE INTO project_members (project_id, user_id, display_name, joined_at) SELECT i.project_id, :__user_id, NULLIF(trim(:display_name), ''), :__now FROM project_invites i JOIN projects p ON p.id = i.project_id WHERE i.code = :code AND i.expires_at > :__now AND p.user_id <> :__user_id",
+        "DELETE FROM project_invites WHERE code = :code AND EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = project_invites.project_id AND pm.user_id = :__user_id)"
+      ],
+      "params": {
+        "code": {
+          "type": "string",
+          "description": "Invite code"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Your name as the project owner will see it",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "list_leads",
+      "description": "Browse the signed-in user's leads, optionally filtered by list, status, or a search term, and sorted. list_ids is a comma-separated string of the lists each lead belongs to. last_message_at is the time of the most recent recorded message (epoch ms), null if none; last_reply_at is the time of the lead's most recent message to the user (direction 'in'), null if they never replied. needs_attention is 1 when the lead is flagged for the owner, with attention_reason and attention_at. Leads that need attention are always listed first, then the chosen sort applies. source_name / source_kind / source_link describe the lead's source. assigned_to_user_id is who the lead is assigned to (null when nobody)",
+      "operation": "query",
+      "sql": "SELECT l.*, (SELECT s.name FROM sources s WHERE s.id = l.source_id) AS source_name, (SELECT s.kind FROM sources s WHERE s.id = l.source_id) AS source_kind, (SELECT s.url FROM sources s WHERE s.id = l.source_id) AS source_link, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.user_id = :__user_id AND (:list_id IS NULL OR l.id IN (SELECT lead_id FROM lead_lists WHERE list_id = :list_id AND user_id = :__user_id)) AND (:project_id IS NULL OR l.id IN (SELECT ll.lead_id FROM lead_lists ll JOIN lists li ON li.id = ll.list_id WHERE li.project_id = :project_id AND li.user_id = :__user_id)) AND (:assigned_to IS NULL OR l.assigned_to_user_id = CASE WHEN :assigned_to = 'me' THEN :__user_id ELSE :assigned_to END OR (:assigned_to = 'none' AND l.assigned_to_user_id IS NULL)) AND (:status IS NULL OR l.status = :status) AND (:fit IS NULL OR l.fit = :fit) AND (:country IS NULL OR l.country = upper(:country) OR (:country = 'none' AND l.country IS NULL)) AND (:source_id IS NULL OR l.source_id = :source_id OR (:source_id = 'none' AND l.source_id IS NULL)) AND (:needs_attention IS NULL OR l.needs_attention = :needs_attention) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR (SELECT s.name FROM sources s WHERE s.id = l.source_id) LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY l.needs_attention DESC, CASE WHEN :dir = 'desc' THEN NULL ELSE CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'attention' THEN l.attention_at WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE ASC NULLS LAST, CASE WHEN :dir = 'desc' THEN CASE :sort WHEN 'email' THEN l.email WHEN 'status' THEN (CASE l.status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 WHEN 'replied' THEN 2 WHEN 'qualified' THEN 3 WHEN 'won' THEN 4 WHEN 'lost' THEN 5 ELSE 6 END) WHEN 'last_contact' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) WHEN 'last_reply' THEN (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') WHEN 'fit' THEN (CASE l.fit WHEN 'high' THEN 0 WHEN 'med' THEN 1 WHEN 'low' THEN 2 END) WHEN 'attention' THEN l.attention_at WHEN 'found' THEN l.found_at WHEN 'created' THEN l.created_at ELSE l.name END END COLLATE NOCASE DESC NULLS LAST, l.name COLLATE NOCASE, l.id LIMIT :limit OFFSET :offset",
       "params": {
         "list_id": {
           "type": "string",
           "optional": true,
           "description": "Only leads in this list"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Only leads in a list of this project",
+          "optional": true
+        },
+        "assigned_to": {
+          "type": "string",
+          "description": "Only leads assigned to this user ID (from list_project_members). 'me' = assigned to you, 'none' = assigned to nobody",
+          "optional": true
         },
         "status": {
           "type": "string",
@@ -147,9 +389,9 @@
     },
     {
       "name": "count_leads",
-      "description": "Total number of leads in the signed-in user's database, and how many are marked as needing attention, and how many have no source",
+      "description": "Total number of leads in the signed-in user's database, how many are marked as needing attention, how many have no source, and how many leads (yours or shared with you) are assigned to you",
       "operation": "query",
-      "sql": "SELECT COUNT(*) AS total, COALESCE(SUM(needs_attention), 0) AS needs_attention, COALESCE(SUM(CASE WHEN source_id IS NULL THEN 1 ELSE 0 END), 0) AS no_source FROM leads WHERE user_id = :__user_id",
+      "sql": "SELECT COUNT(*) AS total, COALESCE(SUM(needs_attention), 0) AS needs_attention, COALESCE(SUM(CASE WHEN source_id IS NULL THEN 1 ELSE 0 END), 0) AS no_source, (SELECT COUNT(*) FROM leads a WHERE a.assigned_to_user_id = :__user_id AND (a.user_id = :__user_id OR (a.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = a.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = a.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = a.id)))) AS assigned_to_me FROM leads WHERE user_id = :__user_id",
       "params": {},
       "requires_auth": true
     },
@@ -186,12 +428,62 @@
       "name": "get_lead",
       "operation": "query",
       "requires_auth": true,
-      "description": "Get one lead by ID, with its lists (list_ids) and last_message_at / last_reply_at",
-      "sql": "SELECT l.*, (SELECT s.name FROM sources s WHERE s.id = l.source_id) AS source_name, (SELECT s.kind FROM sources s WHERE s.id = l.source_id) AS source_kind, (SELECT s.url FROM sources s WHERE s.id = l.source_id) AS source_link, (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.id = :id AND l.user_id = :__user_id",
+      "description": "Get one lead by ID, with its lists (list_ids) and last_message_at / last_reply_at. Works for your own leads and for leads assigned to you in a project you joined (shared 1 - list_ids is then null, and you may only set_lead_status, flag_needs_attention and record messages)",
+      "sql": "SELECT l.*, CASE WHEN l.user_id = :__user_id THEN 0 ELSE 1 END AS shared, (SELECT s.name FROM sources s WHERE s.id = l.source_id) AS source_name, (SELECT s.kind FROM sources s WHERE s.id = l.source_id) AS source_kind, (SELECT s.url FROM sources s WHERE s.id = l.source_id) AS source_link, CASE WHEN l.user_id = :__user_id THEN (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) END AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.id = :id AND (l.user_id = :__user_id OR (l.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = l.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = l.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = l.id)))",
       "params": {
         "id": {
           "type": "string",
           "description": "Lead ID"
+        }
+      }
+    },
+    {
+      "name": "list_assigned_leads",
+      "operation": "query",
+      "requires_auth": true,
+      "description": "Leads assigned to the signed-in user: their own, and leads other people shared with them through a project they joined (shared 1, project_id says which). Flagged leads first, then the most recently changed. Same columns as list_leads",
+      "sql": "SELECT l.*, CASE WHEN l.user_id = :__user_id THEN 0 ELSE 1 END AS shared, (SELECT pr.id FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = l.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = l.user_id WHERE ll.lead_id = l.id AND (pr.user_id = :__user_id OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = pr.id AND pm.user_id = :__user_id)) ORDER BY pr.name LIMIT 1) AS project_id, (SELECT s.name FROM sources s WHERE s.id = l.source_id) AS source_name, (SELECT s.kind FROM sources s WHERE s.id = l.source_id) AS source_kind, (SELECT s.url FROM sources s WHERE s.id = l.source_id) AS source_link, CASE WHEN l.user_id = :__user_id THEN (SELECT group_concat(ll.list_id) FROM lead_lists ll WHERE ll.lead_id = l.id) END AS list_ids, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id) AS last_message_at, (SELECT MAX(m.occurred_at) FROM messages m WHERE m.lead_id = l.id AND m.direction = 'in') AS last_reply_at FROM leads l WHERE l.assigned_to_user_id = :__user_id AND (l.user_id = :__user_id OR (l.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = l.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = l.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = l.id))) AND (:status IS NULL OR l.status = :status) AND (:q IS NULL OR l.name LIKE '%' || :q || '%' OR l.company LIKE '%' || :q || '%' OR l.title LIKE '%' || :q || '%' OR l.email LIKE '%' || :q || '%' OR l.phone LIKE '%' || :q || '%') ORDER BY l.needs_attention DESC, l.updated_at DESC, l.id LIMIT :limit OFFSET :offset",
+      "params": {
+        "status": {
+          "type": "string",
+          "description": "Only leads with this status",
+          "optional": true
+        },
+        "q": {
+          "type": "string",
+          "description": "Search name, company, title, email, phone",
+          "optional": true
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "default": 100,
+          "max": 500,
+          "description": "Max results"
+        },
+        "offset": {
+          "type": "integer",
+          "optional": true,
+          "default": 0,
+          "description": "Rows to skip"
+        }
+      }
+    },
+    {
+      "name": "assign_lead",
+      "operation": "execute",
+      "requires_auth": true,
+      "description": "Assign one of your leads to a person, or unassign it with user_id null. The person must be you (user_id me) or a member (list_project_members) of a project that has a list the lead is in - they then see the lead with list_assigned_leads. \"changes\": 0 means the lead is not yours or that person is not in such a project",
+      "sql": "UPDATE leads SET assigned_to_user_id = p.assignee, updated_at = p.now FROM (SELECT :id AS id, :__user_id AS uid, :__now AS now, CASE WHEN :user_id = 'me' THEN :__user_id ELSE :user_id END AS assignee) AS p WHERE leads.id = p.id AND leads.user_id = p.uid AND (p.assignee IS NULL OR p.assignee = p.uid OR EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = p.assignee WHERE ll.lead_id = leads.id))",
+      "params": {
+        "id": {
+          "type": "string",
+          "description": "Lead ID"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Member user ID, 'me', or null to unassign",
+          "optional": true
         }
       }
     },
@@ -435,8 +727,8 @@
       "name": "set_lead_status",
       "operation": "execute",
       "requires_auth": true,
-      "description": "Change only the pipeline status of a lead. Keep it in step with the conversation - contacted once you have written, replied once the lead has answered. \"changes\": 0 means the id does not exist or the status is not an allowed value.",
-      "sql": "UPDATE leads SET status = :status, updated_at = :__now WHERE id = :id AND user_id = :__user_id AND :status IN ('new', 'contacted', 'replied', 'qualified', 'won', 'lost')",
+      "description": "Change only the pipeline status of a lead. Keep it in step with the conversation - contacted once you have written, replied once the lead has answered. \"changes\": 0 means the id does not exist or the status is not an allowed value. Also works on a lead assigned to you in a project you joined.",
+      "sql": "UPDATE leads SET status = :status, updated_at = :__now WHERE id = :id AND (leads.user_id = :__user_id OR (leads.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = leads.id))) AND :status IN ('new', 'contacted', 'replied', 'qualified', 'won', 'lost')",
       "params": {
         "id": {
           "type": "string",
@@ -452,8 +744,8 @@
       "name": "flag_needs_attention",
       "operation": "execute",
       "requires_auth": true,
-      "description": "Mark a lead as NEEDS ATTENTION from the human owner, with the reason. Use it whenever you should not or cannot continue on your own - the lead asked something only the owner can answer, wants a call, is ready to commit, is upset, looks like a duplicate, or you are unsure what to do. It does not change the pipeline status. Flagging again replaces the reason. \"changes\": 0 means the id does not exist or the reason is empty.",
-      "sql": "UPDATE leads SET needs_attention = 1, attention_reason = :reason, attention_at = :__now, updated_at = :__now WHERE id = :id AND user_id = :__user_id AND trim(:reason) <> ''",
+      "description": "Mark a lead as NEEDS ATTENTION from the human owner, with the reason. Use it whenever you should not or cannot continue on your own - the lead asked something only the owner can answer, wants a call, is ready to commit, is upset, looks like a duplicate, or you are unsure what to do. It does not change the pipeline status. Flagging again replaces the reason. \"changes\": 0 means the id does not exist or the reason is empty. Also works on a lead assigned to you in a project you joined.",
+      "sql": "UPDATE leads SET needs_attention = 1, attention_reason = :reason, attention_at = :__now, updated_at = :__now WHERE id = :id AND (leads.user_id = :__user_id OR (leads.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = leads.id))) AND trim(:reason) <> ''",
       "params": {
         "id": {
           "type": "string",
@@ -825,9 +1117,9 @@
     },
     {
       "name": "list_messages",
-      "description": "Read the recorded conversation with a lead, oldest first. Every message has its exact time (occurred_at, epoch ms), platform, direction ('in' from the lead, 'out' to the lead) and full body. Page with offset to read everything",
+      "description": "Read the recorded conversation with a lead, oldest first. Every message has its exact time (occurred_at, epoch ms), platform, direction ('in' from the lead, 'out' to the lead) and full body. Page with offset to read everything. Also works on a lead assigned to you in a project you joined",
       "operation": "query",
-      "sql": "SELECT id, lead_id, platform, direction, body, occurred_at, created_at FROM messages WHERE lead_id = :lead_id AND user_id = :__user_id AND (:platform IS NULL OR platform = :platform) ORDER BY occurred_at, seq, created_at LIMIT :limit OFFSET :offset",
+      "sql": "SELECT m.id, m.lead_id, m.platform, m.direction, m.body, m.occurred_at, m.created_at FROM messages m JOIN leads l ON l.id = m.lead_id AND l.user_id = m.user_id WHERE m.lead_id = :lead_id AND (l.user_id = :__user_id OR (l.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = l.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = l.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = l.id))) AND (:platform IS NULL OR m.platform = :platform) ORDER BY m.occurred_at, m.seq, m.created_at LIMIT :limit OFFSET :offset",
       "params": {
         "lead_id": {
           "type": "string",
@@ -858,8 +1150,8 @@
       "name": "add_messages",
       "operation": "execute",
       "requires_auth": true,
-      "description": "Record a whole conversation thread with a lead in ONE call. messages is a JSON array, in the order the messages were sent; array order is kept even when several messages share the same minute. SAFE TO REPEAT - messages already stored for this lead (same direction, same occurred_at, same body) are skipped, so re-sending a thread only adds what is new. Genuine repeats in one thread (the same text sent twice in the same minute) are kept. \"changes\" is the number of messages stored. If ANY item is malformed (direction not 'in'/'out', empty body, occurred_at not an integer, platform not allowed) NOTHING is stored. Give each message its own real occurred_at - do not stamp a whole thread with one time.",
-      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, seq, created_at) SELECT lower(hex(randomblob(16))), :__user_id, l.id, COALESCE(json_extract(j.value, '$.platform'), :platform), json_extract(j.value, '$.direction'), json_extract(j.value, '$.body'), json_extract(j.value, '$.occurred_at'), (SELECT COUNT(*) FROM messages c WHERE c.lead_id = l.id) + j.key, :__now FROM leads l, json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS j WHERE l.id = :lead_id AND l.user_id = :__user_id AND NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS b WHERE json_extract(b.value, '$.direction') IS NULL OR json_extract(b.value, '$.direction') NOT IN ('in', 'out') OR json_extract(b.value, '$.body') IS NULL OR trim(json_extract(b.value, '$.body')) = '' OR typeof(json_extract(b.value, '$.occurred_at')) <> 'integer' OR COALESCE(json_extract(b.value, '$.platform'), :platform) IS NULL OR COALESCE(json_extract(b.value, '$.platform'), :platform) NOT IN ('LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other')) AND (SELECT COUNT(*) FROM json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS c2 WHERE c2.key <= j.key AND json_extract(c2.value, '$.direction') = json_extract(j.value, '$.direction') AND json_extract(c2.value, '$.occurred_at') = json_extract(j.value, '$.occurred_at') AND json_extract(c2.value, '$.body') = json_extract(j.value, '$.body')) > (SELECT COUNT(*) FROM messages e WHERE e.lead_id = l.id AND e.direction = json_extract(j.value, '$.direction') AND e.occurred_at = json_extract(j.value, '$.occurred_at') AND e.body = json_extract(j.value, '$.body'))",
+      "description": "Record a whole conversation thread with a lead in ONE call. messages is a JSON array, in the order the messages were sent; array order is kept even when several messages share the same minute. SAFE TO REPEAT - messages already stored for this lead (same direction, same occurred_at, same body) are skipped, so re-sending a thread only adds what is new. Genuine repeats in one thread (the same text sent twice in the same minute) are kept. \"changes\" is the number of messages stored. If ANY item is malformed (direction not 'in'/'out', empty body, occurred_at not an integer, platform not allowed) NOTHING is stored. Give each message its own real occurred_at - do not stamp a whole thread with one time. Also works on a lead assigned to you in a project you joined.",
+      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, seq, created_at) SELECT lower(hex(randomblob(16))), l.user_id, l.id, COALESCE(json_extract(j.value, '$.platform'), :platform), json_extract(j.value, '$.direction'), json_extract(j.value, '$.body'), json_extract(j.value, '$.occurred_at'), (SELECT COUNT(*) FROM messages c WHERE c.lead_id = l.id) + j.key, :__now FROM leads l, json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS j WHERE l.id = :lead_id AND (l.user_id = :__user_id OR (l.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = l.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = l.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = l.id))) AND NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS b WHERE json_extract(b.value, '$.direction') IS NULL OR json_extract(b.value, '$.direction') NOT IN ('in', 'out') OR json_extract(b.value, '$.body') IS NULL OR trim(json_extract(b.value, '$.body')) = '' OR typeof(json_extract(b.value, '$.occurred_at')) <> 'integer' OR COALESCE(json_extract(b.value, '$.platform'), :platform) IS NULL OR COALESCE(json_extract(b.value, '$.platform'), :platform) NOT IN ('LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other')) AND (SELECT COUNT(*) FROM json_each(CASE WHEN json_valid(:messages) THEN :messages ELSE '[]' END) AS c2 WHERE c2.key <= j.key AND json_extract(c2.value, '$.direction') = json_extract(j.value, '$.direction') AND json_extract(c2.value, '$.occurred_at') = json_extract(j.value, '$.occurred_at') AND json_extract(c2.value, '$.body') = json_extract(j.value, '$.body')) > (SELECT COUNT(*) FROM messages e WHERE e.lead_id = l.id AND e.direction = json_extract(j.value, '$.direction') AND e.occurred_at = json_extract(j.value, '$.occurred_at') AND e.body = json_extract(j.value, '$.body'))",
       "params": {
         "lead_id": {
           "type": "string",
@@ -878,9 +1170,9 @@
     },
     {
       "name": "add_message",
-      "description": "Record ONE message of a conversation with a lead. To record a whole thread use add_messages - one call, and safe to repeat. \"changes\": 0 means nothing was saved - unknown lead_id, platform not in the allowed list, direction not 'in' or 'out', or an empty body.",
+      "description": "Record ONE message of a conversation with a lead. To record a whole thread use add_messages - one call, and safe to repeat. \"changes\": 0 means nothing was saved - unknown lead_id, platform not in the allowed list, direction not 'in' or 'out', or an empty body. Also works on a lead assigned to you in a project you joined.",
       "operation": "execute",
-      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, seq, created_at) SELECT :id, :__user_id, l.id, :platform, :direction, :body, :occurred_at, (SELECT COUNT(*) FROM messages c WHERE c.lead_id = l.id), :__now FROM leads l WHERE l.id = :lead_id AND l.user_id = :__user_id AND :platform IN ('LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other') AND :direction IN ('in', 'out') AND trim(:body) <> ''",
+      "sql": "INSERT INTO messages (id, user_id, lead_id, platform, direction, body, occurred_at, seq, created_at) SELECT :id, l.user_id, l.id, :platform, :direction, :body, :occurred_at, (SELECT COUNT(*) FROM messages c WHERE c.lead_id = l.id), :__now FROM leads l WHERE l.id = :lead_id AND (l.user_id = :__user_id OR (l.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_lists ll JOIN lists li ON li.id = ll.list_id AND li.user_id = l.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = l.user_id JOIN project_members pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = l.id))) AND :platform IN ('LinkedIn', 'Email', 'X', 'Instagram', 'Facebook', 'Messenger', 'TikTok', 'YouTube', 'WhatsApp', 'Telegram', 'SMS', 'Phone call', 'In person', 'Other') AND :direction IN ('in', 'out') AND trim(:body) <> ''",
       "params": {
         "id": {
           "type": "string",

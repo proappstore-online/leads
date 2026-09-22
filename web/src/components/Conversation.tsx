@@ -11,7 +11,8 @@ function toInputValue(ms: number): string {
   return new Date(ms - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
 
-export function Conversation({ lead, onChanged }: { lead: Lead; onChanged: () => void }) {
+/** readOnlyHistory: someone else's lead shared with you — you can add messages but not change recorded ones. */
+export function Conversation({ lead, onChanged, readOnlyHistory = false }: { lead: Lead; onChanged: () => void; readOnlyHistory?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -99,8 +100,10 @@ export function Conversation({ lead, onChanged }: { lead: Lead; onChanged: () =>
               </div>
               <div className="mt-1 flex items-center gap-2 text-xs text-[var(--muted)]">
                 <span>{m.direction === 'out' ? 'You' : lead.name} · {m.platform} · <time dateTime={new Date(m.occurred_at).toISOString()}>{new Date(m.occurred_at).toLocaleString()}</time></span>
-                <button type="button" onClick={() => startEdit(m)} className="font-semibold hover:text-[var(--ink)]">Edit</button>
-                <button type="button" onClick={() => remove(m)} className="font-semibold hover:text-[var(--error)]">Delete</button>
+                {!readOnlyHistory && <>
+                  <button type="button" onClick={() => startEdit(m)} className="font-semibold hover:text-[var(--ink)]">Edit</button>
+                  <button type="button" onClick={() => remove(m)} className="font-semibold hover:text-[var(--error)]">Delete</button>
+                </>}
               </div>
             </li>
           ))}
