@@ -17,10 +17,12 @@ function barPath(x: number, y: number, w: number, h: number): string {
 }
 
 /** Grouped bar chart over time buckets, with hover tooltip, legend (2+ series) and a table view. */
-export function BarChart({ title, labels, series, height = 170 }: {
+export function BarChart({ title, labels, series, current, height = 170 }: {
   title: string
   labels: string[]
   series: Series[]
+  /** Index of the bucket that contains now (today / this week / this month) - shaded and labelled. */
+  current?: number
   height?: number
 }) {
   const [hover, setHover] = useState<number | null>(null)
@@ -37,6 +39,8 @@ export function BarChart({ title, labels, series, height = 170 }: {
   const groupBarsW = barW * series.length + gap * (series.length - 1)
   const y = (v: number) => PAD.top + plotH - (v / top) * plotH
   const every = Math.ceil(n / 8)
+  // The current bucket's label always shows; drop a regular label that would crowd it.
+  const showLabel = (i: number) => i === current || (i % every === 0 && (current === undefined || Math.abs(current - i) >= every))
   const totals = series.map((s) => s.values.reduce((a, b) => a + b, 0))
 
   return (
@@ -65,6 +69,9 @@ export function BarChart({ title, labels, series, height = 170 }: {
               <text x={PAD.left - 6} y={y(t) + 3} textAnchor="end" fontSize={10} fill="var(--muted)">{t}</text>
             </g>
           ))}
+          {current !== undefined && (
+            <rect x={PAD.left + current * groupW} y={PAD.top} width={groupW} height={plotH} rx={4} fill="color-mix(in srgb, var(--ink) 8%, transparent)" stroke="color-mix(in srgb, var(--ink) 35%, transparent)" strokeDasharray="3 3" />
+          )}
           {hover !== null && <rect x={PAD.left + hover * groupW} y={PAD.top} width={groupW} height={plotH} fill="var(--line)" />}
           {labels.map((label, i) => {
             const gx = PAD.left + i * groupW + (groupW - groupBarsW) / 2
@@ -75,8 +82,17 @@ export function BarChart({ title, labels, series, height = 170 }: {
                   if (v <= 0) return null
                   return <path key={s.name} d={barPath(gx + k * (barW + gap), y(v), barW, PAD.top + plotH - y(v))} fill={s.color} />
                 })}
-                {i % every === 0 && (
-                  <text x={PAD.left + i * groupW + groupW / 2} y={height - 6} textAnchor="middle" fontSize={10} fill="var(--muted)">{label}</text>
+                {showLabel(i) && (
+                  <text
+                    x={Math.min(W - PAD.right - 2, Math.max(PAD.left + 2, PAD.left + i * groupW + groupW / 2))}
+                    y={height - 6}
+                    textAnchor={i === current && i === n - 1 ? 'end' : 'middle'}
+                    fontSize={i === current ? 11 : 10}
+                    fontWeight={i === current ? 700 : 400}
+                    fill={i === current ? 'var(--ink)' : 'var(--muted)'}
+                  >
+                    {label}
+                  </text>
                 )}
                 {/* Hit target: the whole column, not just the bar. */}
                 <rect x={PAD.left + i * groupW} y={PAD.top} width={groupW} height={plotH} fill="transparent" onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} />
@@ -109,7 +125,7 @@ export function BarChart({ title, labels, series, height = 170 }: {
           </thead>
           <tbody>
             {labels.map((label, i) => (
-              <tr key={i} className="border-t border-[var(--line)]">
+              <tr key={i} className={`border-t border-[var(--line)] ${i === current ? 'font-semibold text-[var(--ink)]' : ''}`}>
                 <td className="py-1">{label}</td>
                 {series.map((s) => <td key={s.name} className="py-1 text-right tabular-nums text-[var(--ink)]">{s.values[i] ?? 0}</td>)}
               </tr>

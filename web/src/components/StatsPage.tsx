@@ -58,6 +58,8 @@ function buckets(range: RangeKey): { pairs: [number, number][]; labels: string[]
     }
     pairs.push([start.getTime(), end.getTime()])
   }
+  // The last bucket is always the current one.
+  labels[labels.length - 1] = unit === 'day' ? 'Today' : unit === 'week' ? 'This week' : 'This month'
   return { pairs, labels }
 }
 
@@ -179,17 +181,18 @@ export function StatsPage({ lists, sources, version, onOpenLead }: {
       </p>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <BarChart title="Leads added" labels={labels} series={[{ name: 'Leads added', color: 'var(--series-1)', values: col('leads_added') }]} />
+        <BarChart title="Leads added" labels={labels} current={labels.length - 1} series={[{ name: 'Leads added', color: 'var(--series-1)', values: col('leads_added') }]} />
         <BarChart
           title="Messages"
           labels={labels}
+          current={labels.length - 1}
           series={[
             { name: 'Sent', color: 'var(--series-1)', values: col('messages_sent') },
             { name: 'Received', color: 'var(--series-2)', values: col('messages_received') },
           ]}
         />
-        <BarChart title="Leads who replied" labels={labels} series={[{ name: 'Leads who replied', color: 'var(--series-1)', values: col('leads_replied') }]} />
-        <BarChart title="Sources added" labels={labels} series={[{ name: 'Sources added', color: 'var(--series-1)', values: col('sources_added') }]} />
+        <BarChart title="Leads who replied" labels={labels} current={labels.length - 1} series={[{ name: 'Leads who replied', color: 'var(--series-1)', values: col('leads_replied') }]} />
+        <BarChart title="Sources added" labels={labels} current={labels.length - 1} series={[{ name: 'Sources added', color: 'var(--series-1)', values: col('sources_added') }]} />
       </div>
 
       {pipeline && (
