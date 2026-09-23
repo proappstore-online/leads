@@ -6,8 +6,10 @@ import { Modal } from './Modal'
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
 
 /** Everything about one source: its details, performance, pipeline and leads. */
-export function SourceDetails({ sourceId, version, onClose, onEdit, onOpenLead, onShowLeads }: {
+export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, onOpenLead, onShowLeads }: {
   sourceId: string
+  /** The current project, or null for every project — the stats and leads here follow it. */
+  projectId: string | null
   /** Bumped by the parent after any save, so the panel reloads. */
   version: number
   onClose: () => void
@@ -22,8 +24,8 @@ export function SourceDetails({ sourceId, version, onClose, onEdit, onOpenLead, 
   useEffect(() => {
     let live = true
     Promise.all([
-      q<SourceDetail>('get_source', { id: sourceId }),
-      q<Lead>('list_leads', { source_id: sourceId, sort: 'last_contact', dir: 'desc', limit: 500 }),
+      q<SourceDetail>('get_source', { id: sourceId, project_id: projectId }),
+      q<Lead>('list_leads', { source_id: sourceId, project_id: projectId, sort: 'last_contact', dir: 'desc', limit: 500 }),
     ]).then(([rows, leadRows]) => {
       if (!live) return
       setSource(rows[0] ?? null)
@@ -31,7 +33,7 @@ export function SourceDetails({ sourceId, version, onClose, onEdit, onOpenLead, 
       if (!rows[0]) setError('This source no longer exists.')
     }).catch((e) => live && setError(e instanceof Error ? e.message : String(e)))
     return () => { live = false }
-  }, [sourceId, version])
+  }, [sourceId, projectId, version])
 
   const tiles: [string, string | number][] = source ? [
     ['Leads', source.leads],

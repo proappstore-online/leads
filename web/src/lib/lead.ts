@@ -29,3 +29,6 @@ export function toInputValue(ms: number): string {
  * list made before projects that has not been moved into one yet.
  */
 export const projectOf = (list: { project_id: string | null }) => list.project_id ?? 'none'
+
+/** The switcher value that means "do not narrow to one project" — every project at once. */
+export const ALL_PROJECTS = 'all'

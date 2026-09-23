@@ -51,6 +51,13 @@ Platform conventions: https://proappstore.online/skills.md
   is the owner or a member of a project that one of the lead's lists belongs to (`assign_lead`
   checks it; actions that remove that path unassign).
 
+The app works in one project at a time: the top-bar switcher (`App.tsx`, remembered under
+`leads.project`) sets it, and every query passes it as `project_id` - `list_lists`, `count_leads`,
+`list_leads`, `list_tags`, `list_sources`, `get_source`, `list_assigned_leads`, the stats tools and
+`recent_activity`. These `project_id` params are optional, so agents that omit them still see
+everything. "All projects" sends none, and is where lists from before projects are shown. `Home` is
+remounted on a switch (`key`), so no filter survives into a project where it does not exist.
+
 Every row carries `user_id`; each signed-in user sees only their own database. One exception: a
 project member reaches a lead assigned to them while it is in a list of a project they belong to -
 `get_lead`, `list_assigned_leads`, `set_lead_status`, `flag_needs_attention` and the message

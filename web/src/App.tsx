@@ -4,7 +4,7 @@ import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
 import { COUNTRY_OPTIONS, countryName } from './lib/countries'
 import { q, x } from './lib/actions'
-import { endOfToday, projectOf } from './lib/lead'
+import { ALL_PROJECTS, endOfToday, projectOf } from './lib/lead'
 import { FITS, STATUSES, type Lead, type LeadList, type Project, type ProjectMember, type Sort, type SortKey, type Source, type SourceSort } from './types'
 import { JoinProject } from './components/JoinProject'
 import { LeadBoard } from './components/LeadBoard'
@@ -17,11 +17,14 @@ import { SourceForm } from './components/SourceForm'
 import { SourcesTable } from './components/SourcesTable'
 import { StatsPage } from './components/StatsPage'
 import { SignIn } from './components/SignIn'
+import { TopBar } from './components/TopBar'
 
 const PAGE = 200
 
 const JOIN_KEY = 'leads.join'
 const LAYOUT_KEY = 'leads.layout'
+/** The project being worked in, remembered per browser. */
+const PROJECT_KEY = 'leads.project'
 // An invite link (?join=<code>) is kept through sign-in and offered once the user is in.
 const joinParam = new URLSearchParams(location.search).get('join')
 if (joinParam) {
@@ -29,21 +32,117 @@ if (joinParam) {
   history.replaceState(null, '', location.pathname + location.hash)
 }
 
+/**
+ * You work in one project at a time: the switcher in the top bar sets it, and everything below -
+ * lists, counts, leads, sources, stats - is narrowed to it. ALL_PROJECTS shows every project at once,
+ * which is also where lists made before projects live.
+ */
 export default function App() {
   const { user, loading } = useProAuth(app)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [project, setProject] = useState<string | null>(() => localStorage.getItem(PROJECT_KEY))
+  const [editingProject, setEditingProject] = useState<Project | 'new' | null>(null)
+  const [joinCode, setJoinCode] = useState(() => localStorage.getItem(JOIN_KEY))
+  /** Bumped when projects or their members change, so Home reloads. */
+  const [projectsVersion, setProjectsVersion] = useState(0)
+  const [error, setError] = useState('')
+
+  const loadProjects = useCallback(async () => {
+    try {
+      setProjects(await q<Project>('list_projects'))
+      setLoaded(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
+
+  // On the id, not the user object: a hook that returns a fresh object per render would reload forever.
+  useEffect(() => { if (user?.id) loadProjects() }, [user?.id, loadProjects, projectsVersion])
+
+  function switchProject(next: string) {
+    localStorage.setItem(PROJECT_KEY, next)
+    setProject(next)
+  }
+
+  // First visit starts in your first own project; a project that is gone (deleted, left) falls back.
+  useEffect(() => {
+    if (!loaded) return
+    if (project === null || (project !== ALL_PROJECTS && !projects.some((p) => p.id === project))) {
+      switchProject(projects.find((p) => p.is_owner)?.id ?? ALL_PROJECTS)
+    }
+  }, [loaded, project, projects])
+
   // ProShell's own signed-out gate is GitHub-only; ours offers Google too.
   if (!loading && !user) return <SignIn />
 
+  const changed = () => setProjectsVersion((v) => v + 1)
+  const closeJoin = () => {
+    localStorage.removeItem(JOIN_KEY)
+    setJoinCode(null)
+  }
+
   return (
-    <ProShell app={app} appName="Leads">
-      <Home userId={user?.id ?? ''} userName={user?.name ?? ''} />
+    <ProShell
+      app={app}
+      appName="Leads"
+      renderTopbar={(ctx) => (
+        <TopBar
+          projects={projects}
+          current={project ?? ALL_PROJECTS}
+          platform={ctx}
+          onSwitch={switchProject}
+          onManage={() => setEditingProject(projects.find((p) => p.id === project) ?? null)}
+          onNew={() => setEditingProject('new')}
+        />
+      )}
+    >
+      {error && <p className="mx-auto w-full max-w-7xl px-4 pt-4 text-sm text-[var(--error)] lg:px-6">{error}</p>}
+      {project !== null && (
+        <Home
+          key={project}
+          userId={user?.id ?? ''}
+          userName={user?.name ?? ''}
+          projects={projects}
+          currentProject={project}
+          projectsVersion={projectsVersion}
+          onProjectsChanged={changed}
+        />
+      )}
+      {editingProject && (
+        <ProjectForm
+          project={editingProject === 'new' ? null : editingProject}
+          ownerName={user?.name ?? ''}
+          onClose={() => setEditingProject(null)}
+          onSaved={(id) => { setEditingProject(null); switchProject(id); loadProjects() }}
+          onDeleted={() => { setEditingProject(null); switchProject(ALL_PROJECTS); loadProjects() }}
+          onChanged={() => { loadProjects(); changed() }}
+        />
+      )}
+      {joinCode && (
+        <JoinProject
+          code={joinCode}
+          userName={user?.name ?? ''}
+          onClose={closeJoin}
+          onJoined={(joined) => { closeJoin(); switchProject(joined); loadProjects() }}
+        />
+      )}
     </ProShell>
   )
 }
 
-function Home({ userId, userName }: { userId: string; userName: string }) {
+function Home({ userId, userName, projects, currentProject, projectsVersion, onProjectsChanged }: {
+  userId: string
+  userName: string
+  projects: Project[]
+  /** Project id, or ALL_PROJECTS. Home is remounted when it changes, so no filter survives a switch. */
+  currentProject: string
+  projectsVersion: number
+  onProjectsChanged: () => void
+}) {
+  /** What every query here is narrowed to: the current project, or null for all of them. */
+  const scope = currentProject === ALL_PROJECTS ? null : currentProject
   const [lists, setLists] = useState<LeadList[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
   /** Everyone who joined one of your projects. */
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [total, setTotal] = useState(0)
@@ -59,11 +158,8 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   const [followUp, setFollowUp] = useState('')
   /** Leads assigned to you — your own and those shared with you. */
   const [assignedOnly, setAssignedOnly] = useState(false)
-  const [projectId, setProjectId] = useState<string | null>(null)
   /** '' = anyone, 'none' = nobody, 'me', otherwise a member's user id. */
   const [assignedTo, setAssignedTo] = useState('')
-  const [editingProject, setEditingProject] = useState<Project | 'new' | null>(null)
-  const [joinCode, setJoinCode] = useState(() => localStorage.getItem(JOIN_KEY))
   const [view, setView] = useState<'leads' | 'sources' | 'stats'>('leads')
   const [sources, setSources] = useState<Source[]>([])
   const [noSource, setNoSource] = useState(0)
@@ -93,17 +189,15 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
 
   const loadLists = useCallback(async () => {
     try {
-      const [rows, count, projectRows, memberRows, tagRows] = await Promise.all([
-        q<LeadList>('list_lists'),
-        q<{ total: number; needs_attention: number; no_source: number; assigned_to_me: number; follow_ups_due: number }>('count_leads', { due_before: endOfToday() }),
-        q<Project>('list_projects'),
-        q<ProjectMember>('list_project_members'),
-        q<{ tag: string; leads: number }>('list_tags'),
+      const [rows, count, memberRows, tagRows] = await Promise.all([
+        q<LeadList>('list_lists', { project_id: scope }),
+        q<{ total: number; needs_attention: number; no_source: number; assigned_to_me: number; follow_ups_due: number }>('count_leads', { project_id: scope, due_before: endOfToday() }),
+        q<ProjectMember>('list_project_members', { project_id: scope }),
+        q<{ tag: string; leads: number }>('list_tags', { project_id: scope }),
       ])
       setTags(tagRows)
       setFollowUpCount(count[0]?.follow_ups_due ?? 0)
       setLists(rows)
-      setProjects(projectRows)
       setMembers(memberRows)
       setTotal(count[0]?.total ?? 0)
       setAttentionCount(count[0]?.needs_attention ?? 0)
@@ -112,18 +206,18 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-  }, [])
+  }, [scope, projectsVersion])
 
   const sourcesRequest = useRef(0)
   const loadSources = useCallback(async () => {
     const id = ++sourcesRequest.current
     try {
-      const rows = await q<Source>('list_sources', { sort: sourceSort })
+      const rows = await q<Source>('list_sources', { sort: sourceSort, project_id: scope })
       if (id === sourcesRequest.current) setSources(rows) // ignore a slower, older response
     } catch (e) {
       if (id === sourcesRequest.current) setError(e instanceof Error ? e.message : String(e))
     }
-  }, [sourceSort])
+  }, [sourceSort, scope])
 
   // A list is addressed by its project (#4) - 'none' for a list made before projects.
   const selectedListProject = listId ? projectOf(lists.find((l) => l.id === listId) ?? { project_id: null }) : null
@@ -132,9 +226,9 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     setLoading(true)
     try {
       const rows = assignedOnly
-        ? await q<Lead>('list_assigned_leads', { status: status || null, q: search.trim() || null, limit: PAGE, offset })
+        ? await q<Lead>('list_assigned_leads', { project_id: scope, status: status || null, q: search.trim() || null, limit: PAGE, offset })
         : await q<Lead>('list_leads', {
-          list_id: listId, project_id: selectedListProject ?? projectId, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null,
+          list_id: listId, project_id: selectedListProject ?? scope, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null,
           needs_attention: attentionOnly || null, source_id: sourceId || null, tag: tag || null, q: search.trim() || null,
           follow_up: followUpsOnly ? 'due' : followUp || null, due_before: endOfToday(),
           sort: followUpsOnly ? 'next_action' : sort.key, dir: followUpsOnly ? 'asc' : sort.dir, limit: PAGE, offset,
@@ -148,7 +242,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [assignedOnly, followUpsOnly, listId, selectedListProject, projectId, assignedTo, status, fit, country, attentionOnly, sourceId, tag, followUp, search, sort])
+  }, [scope, projectsVersion, assignedOnly, followUpsOnly, listId, selectedListProject, assignedTo, status, fit, country, attentionOnly, sourceId, tag, followUp, search, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
   useEffect(() => { loadSources() }, [loadSources])
@@ -177,13 +271,12 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   }
 
   /** Show the leads table for one scope: a list, a project, flagged or assigned leads — or all leads. */
-  function browse(scope: { listId?: string; projectId?: string; attention?: boolean; assigned?: boolean; followUps?: boolean }) {
+  function browse(to: { listId?: string; attention?: boolean; assigned?: boolean; followUps?: boolean }) {
     setView('leads')
-    setListId(scope.listId ?? null)
-    setProjectId(scope.projectId ?? null)
-    setAttentionOnly(Boolean(scope.attention))
-    setAssignedOnly(Boolean(scope.assigned))
-    setFollowUpsOnly(Boolean(scope.followUps))
+    setListId(to.listId ?? null)
+    setAttentionOnly(Boolean(to.attention))
+    setAssignedOnly(Boolean(to.assigned))
+    setFollowUpsOnly(Boolean(to.followUps))
   }
 
   function showSourceLeads(id: string) {
@@ -198,11 +291,6 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
    */
   function closeIfOpen<T>(set: Dispatch<SetStateAction<T | null>>, opened: T) {
     set((current) => (current === opened ? null : current))
-  }
-
-  function closeJoin() {
-    localStorage.removeItem(JOIN_KEY)
-    setJoinCode(null)
   }
 
   function switchLayout(next: 'table' | 'board') {
@@ -228,21 +316,21 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
     loadLists()
     loadSources()
     loadLeads(0)
+    onProjectsChanged()
   }
 
   const current = lists.find((l) => l.id === listId) ?? null
   const ownProjects = projects.filter((p) => p.is_owner)
-  const sharedProjects = projects.filter((p) => !p.is_owner)
-  const currentProject = ownProjects.find((p) => p.id === projectId) ?? null
-  const looseLists = lists.filter((l) => !ownProjects.some((p) => p.id === l.project_id))
+  // Under "All projects", lists made before projects are shown apart, with the prompt to place them.
+  const looseLists = lists.filter((l) => !l.project_id)
   // Names for the Assigned column, filter and form: members of your projects, and you.
   const people = new Map(members.map((m) => [m.user_id, m.display_name ?? 'Unnamed member']))
   people.set(userId, 'Me')
   const assignees = [...new Map(members.map((m) => [m.user_id, m])).values()]
   const chip = (active: boolean) =>
     `flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold ${active ? 'bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'text-[var(--ink)] hover:bg-[var(--line)]'}`
-  const listChip = (list: LeadList, nested = false) => (
-    <button key={list.id} type="button" onClick={() => browse({ listId: list.id })} title={list.purpose ?? undefined} className={`${chip(view === 'leads' && listId === list.id)} ${nested ? 'lg:ml-4' : ''}`}>
+  const listChip = (list: LeadList) => (
+    <button key={list.id} type="button" onClick={() => browse({ listId: list.id })} title={list.purpose ?? undefined} className={chip(view === 'leads' && listId === list.id)}>
       <span className="truncate">{list.name}</span>
       <span className="text-xs font-medium text-[var(--muted)]">{list.lead_count}</span>
     </button>
@@ -251,7 +339,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
       <nav aria-label="Lead lists" className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
-        <button type="button" onClick={() => { browse({}); setSourceId('') }} className={chip(view === 'leads' && listId === null && projectId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
+        <button type="button" onClick={() => { browse({}); setSourceId('') }} className={chip(view === 'leads' && listId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
           <span>All leads</span>
           <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
         </button>
@@ -267,26 +355,10 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
           <span>Assigned to me</span>
           <span className="text-xs font-medium text-[var(--muted)]">{assignedCount}</span>
         </button>
-        {ownProjects.map((project) => (
-          <div key={project.id} className="contents">
-            <button type="button" onClick={() => browse({ projectId: project.id })} title={project.description ?? undefined} className={chip(view === 'leads' && projectId === project.id)}>
-              <span className="truncate">{project.name}</span>
-              <span className="text-xs font-medium text-[var(--muted)]">{project.member_count ? `${project.member_count} ${project.member_count === 1 ? 'member' : 'members'}` : 'project'}</span>
-            </button>
-            {lists.filter((l) => l.project_id === project.id).map((l) => listChip(l, true))}
-          </div>
-        ))}
+        {lists.filter((l) => l.project_id).map((l) => listChip(l))}
         {looseLists.length > 0 && <div className="hidden px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] lg:block" title="Lists from before projects - open one and choose its project">Not in a project</div>}
         {looseLists.map((l) => listChip(l))}
         <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New list</button>
-        <button type="button" onClick={() => setEditingProject('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New project</button>
-        {sharedProjects.length > 0 && <div className="hidden px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] lg:block">Shared with me</div>}
-        {sharedProjects.map((project) => (
-          <button key={project.id} type="button" onClick={() => setEditingProject(project)} className={chip(false)}>
-            <span className="truncate">{project.name}</span>
-            <span className="truncate text-xs font-medium text-[var(--muted)]">{project.owner_name ?? 'shared'}</span>
-          </button>
-        ))}
         <div className="hidden border-t border-[var(--line)] lg:my-2 lg:block" />
         <button type="button" onClick={() => setView('stats')} className={chip(view === 'stats')}>
           <span>Stats</span>
@@ -298,7 +370,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
       </nav>
 
       {view === 'stats' ? (
-        <StatsPage lists={lists} sources={sources} version={version} onOpenLead={openLeadById} />
+        <StatsPage lists={lists} sources={sources} projectId={scope} version={version} onOpenLead={openLeadById} />
       ) : view === 'sources' ? (
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -332,17 +404,14 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : followUpsOnly ? 'Follow-ups due' : assignedOnly ? 'Assigned to me' : current?.name ?? currentProject?.name ?? 'All leads'}</h1>
-            {(current?.purpose || currentProject?.description) && <p className="mt-0.5 text-sm text-[var(--muted)]">{current?.purpose ?? currentProject?.description}</p>}
+            <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : followUpsOnly ? 'Follow-ups due' : assignedOnly ? 'Assigned to me' : current?.name ?? 'All leads'}</h1>
+            {current?.purpose && <p className="mt-0.5 text-sm text-[var(--muted)]">{current.purpose}</p>}
             {followUpsOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Open leads whose follow-up is due by tonight, soonest first. Filter by Follow-up: none set to find leads going cold.</p>}
             {assignedOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Your own leads assigned to you, and leads shared with you through projects you joined.</p>}
           </div>
           <div className="flex flex-wrap gap-2">
             {current && (
               <button type="button" onClick={() => setEditingList(current)} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">Edit list</button>
-            )}
-            {currentProject && (
-              <button type="button" onClick={() => setEditingProject(currentProject)} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">Manage project</button>
             )}
             <div role="group" aria-label="Layout" className="flex rounded-xl border border-[var(--line-strong)] p-0.5">
               {(['table', 'board'] as const).map((l) => (
@@ -438,7 +507,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
               : <LeadTable leads={leads} lists={lists} projects={projects} people={people} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : (
             <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
-              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo || tag || followUp ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : currentProject ? 'No leads in this project\'s lists yet.' : 'No leads yet. Add your first one.'}
+              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo || tag || followUp ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : scope ? 'No leads in this project yet. Add one, or switch project in the top bar.' : 'No leads yet. Add your first one.'}
             </p>
           )}
           {hasMore && (
@@ -454,6 +523,7 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
       {viewingSourceId && (
         <SourceDetails
           sourceId={viewingSourceId}
+          projectId={scope}
           version={version}
           onClose={() => setViewingSourceId(null)}
           onEdit={setEditingSource}
@@ -491,30 +561,11 @@ function Home({ userId, userName }: { userId: string; userName: string }) {
         <ListForm
           list={editingList === 'new' ? null : editingList}
           projects={ownProjects}
-          defaultProjectId={projectId}
+          defaultProjectId={ownProjects.some((p) => p.id === scope) ? scope : null}
           ownerName={userName}
           onClose={() => setEditingList(null)}
           onSaved={(id) => { closeIfOpen(setEditingList, editingList); browse({ listId: id }); refresh() }}
           onDeleted={() => { closeIfOpen(setEditingList, editingList); browse({}); refresh() }}
-        />
-      )}
-      {editingProject && (
-        <ProjectForm
-          project={editingProject === 'new' ? null : editingProject}
-          ownerName={userName}
-          listCount={editingProject === 'new' ? 0 : lists.filter((l) => l.project_id === editingProject.id).length}
-          onClose={() => setEditingProject(null)}
-          onSaved={(id) => { closeIfOpen(setEditingProject, editingProject); browse({ projectId: id }); refresh() }}
-          onDeleted={() => { closeIfOpen(setEditingProject, editingProject); browse({}); refresh() }}
-          onChanged={refresh}
-        />
-      )}
-      {joinCode && (
-        <JoinProject
-          code={joinCode}
-          userName={userName}
-          onClose={closeJoin}
-          onJoined={() => { closeJoin(); browse({ assigned: true }); refresh() }}
         />
       )}
     </div>
