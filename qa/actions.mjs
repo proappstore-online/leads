@@ -159,5 +159,96 @@ ok(call('recent_activity', O, { limit: 50, source_id: 'src' }).every((e) => e.le
 ok(call('recent_activity', O, { limit: 50 }).some((e) => e.kind === 'source_added'), 'sources still appear without a project')
 ok(call('recent_activity', 'stranger', { limit: 50 }).length === 0, 'another user sees none of it')
 
+
+// --- PAS-DATA-022: a stranger, armed with the owner's ids, gets nothing and changes nothing --------
+//
+// One cross-user negative per scoped action (platform#185). Every action in mcp.json is called as a
+// user who owns nothing, with the OWNER's ids as its parameters. A read must return none of the
+// owner's rows; a write must change nothing the owner has. The invariant is checked two ways so a
+// dropped scoping predicate cannot hide: the stranger's result must not carry any owner id, and
+// for reads it must differ from the owner's own result (a count of 0, not 2), and after the whole
+// sweep every row the owner had is still there, byte for byte.
+const S = 'stranger'
+const MSG = randomUUID()
+call('add_message', O, { id: MSG, lead_id: LEAD, platform: 'Email', direction: 'out', body: 'Following up', occurred_at: now })
+call('create_project_invite', O, { project_id: P })
+const CODE = db.prepare('SELECT code FROM project_invites WHERE project_id = ?').get(P).code
+const OWNER_IDS = [P, L, LEAD, OTHER, 'src', MSG, CODE]
+const TABLES = ['leads', 'lists', 'lead_lists', 'messages', 'project_invites', 'project_members', 'projects', 'sources']
+const snapshot = () => Object.fromEntries(TABLES.map((t) => [t, new Set(db.prepare(`SELECT * FROM ${t}`).all().map((r) => JSON.stringify(r)))]))
+const before = snapshot()
+
+/** What a stranger would try: the owner's ids for every id-shaped parameter, valid values elsewhere. */
+const ARGS = {
+  id: LEAD, lead_id: LEAD, list_id: L, project_id: P, to_project_id: P, source_id: 'src', code: CODE, user_id: O,
+  name: 'Alice', country: 'AU', kind: 'Reddit', platform: 'Email', direction: 'out', body: 'x', occurred_at: now,
+  status: 'contacted', reason: 'x', note: 'x', action: 'call', at: now, fields: '{"a":1}', tags: '["t"]',
+  messages: '[{"direction":"in","body":"x","occurred_at":1}]', lead_ids: JSON.stringify([LEAD]),
+  q: 'Alice', limit: 50, buckets: JSON.stringify([[now - 30 * day, now + day]]), display_name: 'Eve',
+}
+/** Actions where a stranger's call is NOT a cross-user attempt, each with why. */
+const SKIP = {
+  how_to_use: 'static guidance, the same for every caller',
+  get_project_invite: 'the invite code IS the grant — reading it by code is how joining works',
+  join_project: 'the grant path; its one-shot behaviour is tested below',
+  check_lead_links: 'validates the caller\'s own input and touches no rows',
+}
+/** Executes where the stranger creates a row of their OWN (owner-less); it must carry the stranger's id. */
+const SELF_CREATE = { create_project: 'projects', create_source: 'sources', create_lead: 'leads' }
+const hasOwnerId = (v) => OWNER_IDS.some((id) => JSON.stringify(v).includes(id))
+const argsFor = (tool, fresh) => {
+  const out = {}
+  for (const [name, schema] of Object.entries(tool.params ?? {})) {
+    if (name === 'id' && fresh) { out.id = fresh; continue }
+    if (name in ARGS) out[name] = ARGS[name]
+    else if (!schema.optional) out[name] = schema.type === 'integer' ? 1 : schema.type === 'boolean' ? false : 'x'
+  }
+  return out
+}
+let swept = 0
+for (const tool of Object.values(TOOLS)) {
+  if (tool.name in SKIP) { console.log(`SKIP  ${tool.name} — ${SKIP[tool.name]}`); continue }
+  swept++
+  const fresh = tool.name in SELF_CREATE ? randomUUID() : undefined
+  const params = argsFor(tool, fresh)
+  let result
+  try { result = call(tool.name, S, params) } catch (e) { ok(false, `${tool.name}: a stranger's call threw (${e.message})`); continue }
+  if (tool.operation === 'query') {
+    const owners = call(tool.name, O, params)
+    const differs = JSON.stringify(result) !== JSON.stringify(owners)
+    ok(!hasOwnerId(result) && (differs || owners.length === 0),
+      `${tool.name}: a stranger with the owner's ids sees none of the owner's data (${result.length} row(s); owner sees ${owners.length})`)
+  } else if (fresh) {
+    // Named with the owner's ids (their source, say), the create is either refused or makes a row
+    // that is the stranger's own — never one attached to the owner.
+    const row = db.prepare(`SELECT user_id FROM ${SELF_CREATE[tool.name]} WHERE id = ?`).get(fresh)
+    ok(row === undefined || (row.user_id === S && !hasOwnerId(row)),
+      `${tool.name}: with the owner's ids a stranger's create is refused or is the stranger's own (${row ? 'created as ' + row.user_id : 'refused'})`)
+    // And with nothing of the owner's, it works and is stamped with the caller — :__user_id, not a parameter.
+    const own = randomUUID()
+    const bare = Object.fromEntries(Object.entries(argsFor(tool, own)).filter(([, v]) => !hasOwnerId(v)))
+    if ('name' in bare) bare.name = `own ${own.slice(0, 8)}` // sources refuse a duplicate name per user
+    call(tool.name, S, bare)
+    const mine = db.prepare(`SELECT user_id FROM ${SELF_CREATE[tool.name]} WHERE id = ?`).get(own)
+    ok(mine?.user_id === S, `${tool.name}: a stranger's own create is stamped with the stranger's id`)
+  } else {
+    const changes = Array.isArray(result) ? result : [result]
+    ok(changes.every((c) => c === 0), `${tool.name}: a stranger with the owner's ids changes nothing (${changes.join(',')})`)
+  }
+}
+const after = snapshot()
+ok(TABLES.every((t) => [...before[t]].every((row) => after[t].has(row))),
+  'after the sweep every row the owner had is still there, unchanged')
+ok(swept + Object.keys(SKIP).length === Object.keys(TOOLS).length && swept === Object.keys(TOOLS).length - Object.keys(SKIP).length,
+  `every action in mcp.json was swept or named as an exception (${swept} swept, ${Object.keys(SKIP).length} skipped, ${Object.keys(TOOLS).length} total)`)
+
+// The one grant a stranger may take — an invite code — is one-shot (PAS-DATA-008).
+const joined = call('join_project', S, { code: CODE, display_name: 'Eve' })
+ok(joined[0] === 1 && joined[1] === 1, `a valid invite admits the stranger and is consumed (${joined.join(',')})`)
+const again = call('join_project', S, { code: CODE, display_name: 'Eve' })
+ok(again.every((c) => c === 0), `the same code cannot be redeemed twice (${again.join(',')})`)
+ok(call('list_project_members', O, { project_id: P }).filter((m) => m.user_id === S).length === 1, 'the owner sees the new member exactly once')
+ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code no longer resolves')
+
 console.log(failures ? `\n${failures} check(s) failed` : `\nall checks passed`)
 process.exit(failures ? 1 : 0)

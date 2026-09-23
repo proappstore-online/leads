@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -16,3 +18,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # The manifest tests: every registered action in mcp.json run against a
+      # real SQLite built from migrations.json (node:sqlite, Node 22), including
+      # one cross-user negative per scoped action (PAS-DATA-022). CI stopped at
+      # typecheck before, so a scoping regression shipped on a green run
+      # (proappstore-online/platform#185, PAS-OPS-001).
+      - run: pnpm test
