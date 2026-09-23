@@ -7,7 +7,7 @@ import type { Lead, LeadList, Project, Sort, SortKey } from '../types'
 
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
 
-const SORTS: [SortKey, string][] = [['name', 'Name'], ['email', 'Contact'], ['fit', 'Fit'], ['next_action', 'Follow-up'], ['last_contact', 'Last contact'], ['last_reply', 'Last reply'], ['status', 'Status']]
+const SORTS: [SortKey, string][] = [['name', 'Name'], ['email', 'Contact'], ['fit', 'Fit'], ['next_action', 'Follow-up'], ['last_contact', 'Last contact'], ['last_reply', 'Last reply'], ['updated', 'Recently changed'], ['status', 'Status']]
 
 /** Leads as a table from the sm breakpoint up, and as stacked cards on phones. */
 export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen }: {
@@ -139,6 +139,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
               {sortable('next_action', 'Follow-up')}
               {sortable('last_contact', 'Last contact', 'hidden md:table-cell')}
               {sortable('last_reply', 'Last reply', 'hidden lg:table-cell')}
+              {sortable('updated', 'Changed', 'hidden lg:table-cell')}
               {sortable('status', 'Status')}
             </tr>
           </thead>
@@ -167,6 +168,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
                 <td className="px-4 py-3 text-xs text-[var(--muted)]">{followUp(lead) || '—'}</td>
                 <td className="hidden px-4 py-3 text-xs text-[var(--muted)] md:table-cell">{date(lead.last_message_at)}</td>
                 <td className="hidden px-4 py-3 text-xs text-[var(--muted)] lg:table-cell">{date(lead.last_reply_at)}</td>
+                <td className="hidden px-4 py-3 text-xs text-[var(--muted)] lg:table-cell">{date(lead.updated_at)}</td>
                 <td className="px-4 py-3 text-xs font-semibold capitalize text-[var(--muted)]">{lead.status}</td>
               </tr>
             ))}

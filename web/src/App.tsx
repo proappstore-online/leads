@@ -226,12 +226,12 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
     setLoading(true)
     try {
       const rows = assignedOnly
-        ? await q<Lead>('list_assigned_leads', { project_id: scope, status: status || null, q: search.trim() || null, limit: PAGE, offset })
+        ? await q<Lead>('list_assigned_leads', { project_id: scope, status: status || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
         : await q<Lead>('list_leads', {
           list_id: listId, project_id: selectedListProject ?? scope, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null,
           needs_attention: attentionOnly || null, source_id: sourceId || null, tag: tag || null, q: search.trim() || null,
           follow_up: followUpsOnly ? 'due' : followUp || null, due_before: endOfToday(),
-          sort: followUpsOnly ? 'next_action' : sort.key, dir: followUpsOnly ? 'asc' : sort.dir, limit: PAGE, offset,
+          sort: sort.key, dir: sort.dir, limit: PAGE, offset,
         })
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
@@ -257,7 +257,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   function toggleSort(key: SortKey) {
     setSort((prev) => prev.key === key
       ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-      : { key, dir: key === 'last_contact' || key === 'last_reply' ? 'desc' : 'asc' })
+      : { key, dir: key === 'last_contact' || key === 'last_reply' || key === 'updated' ? 'desc' : 'asc' })
   }
 
   async function openLeadById(id: string) {
@@ -277,6 +277,9 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
     setAttentionOnly(Boolean(to.attention))
     setAssignedOnly(Boolean(to.assigned))
     setFollowUpsOnly(Boolean(to.followUps))
+    // Each view opens on the order that suits it; the sort controls take over from there.
+    if (to.assigned) setSort({ key: 'updated', dir: 'desc' })
+    else if (to.followUps) setSort({ key: 'next_action', dir: 'asc' })
   }
 
   function showSourceLeads(id: string) {

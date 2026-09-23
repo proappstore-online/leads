@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url'
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
+/** Which fixture set to render against (QA_FIXTURES), so one config serves every check. */
+const fixtures = here(process.env.QA_FIXTURES ?? './fixtures/actions.ts')
+
 /** The real app, with the platform SDK and every action replaced by fixtures. */
 export default defineConfig({
   root: here('..'),
@@ -12,7 +15,7 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: /^@proappstore\/sdk(\/hooks)?$/, replacement: here('./fixtures/sdk.tsx') },
-      { find: /^.*\/lib\/actions$/, replacement: here('./fixtures/actions.ts') },
+      { find: /^.*\/lib\/actions$/, replacement: fixtures },
     ],
   },
 })

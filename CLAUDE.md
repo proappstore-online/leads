@@ -102,7 +102,9 @@ a list purpose) carries `wrapAnywhere` from `components/styles.ts`. A chip or fl
 `min-w-0`, and a `<fieldset>` needs it too - it defaults to `min-width: min-content`.
 `pnpm --filter @leads/web qa:overflow` renders the app against fixtures full of extreme URLs and
 fails if any page or modal scrolls sideways at 320px or 375px (`web/qa/`, needs a local Chromium;
-not part of CI).
+not part of CI). `qa:sorting` does the same for the sort controls (#11): both views that used to
+pin their own order - Assigned to me and Follow-ups due - now open on a sensible sort and then
+follow the controls, so `list_assigned_leads` takes `sort`/`dir` like `list_leads`.
 
 Agent-facing conventions live in the `how_to_use` action — update it when a rule changes.
 Every action must bind at least one param (hence its `WHERE :__user_id IS NOT NULL`): the data

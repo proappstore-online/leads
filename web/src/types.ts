@@ -99,7 +99,7 @@ export interface Message {
 }
 
 /** Column a lead table can be sorted by — the `sort` values list_leads accepts. */
-export type SortKey = 'name' | 'email' | 'fit' | 'last_contact' | 'last_reply' | 'next_action' | 'status'
+export type SortKey = 'name' | 'email' | 'fit' | 'last_contact' | 'last_reply' | 'next_action' | 'updated' | 'status'
 export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
 
 /** A place leads are found (Facebook group, page, event…) with its performance, as list_sources returns it. */
