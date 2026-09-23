@@ -2,6 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Content-Security-Policy (PAS-UI-013; proappstore-online/platform#188).
+      A per-app tightening of the platform header, which allows 'unsafe-inline'
+      for scripts. Only script-src and the anti-injection directives are set
+      here, so every other directive stays the platform's (a <meta> CSP can
+      only tighten). Sources:
+        'sha256-…'                            the pre-paint theme bootstrap
+                                              below — recompute if it changes;
+                                              qa/csp.mjs fails when they drift
+        https://api.proappstore.online        platform analytics.js
+        https://static.cloudflareinsights.com the Cloudflare Web Analytics
+                                              beacon analytics.js injects
+      No 'unsafe-inline' and no 'unsafe-eval': an injected inline script tag
+      does not run. React escapes everything and the app has no HTML sinks
+      (qa/csp.mjs checks), so this is the second line of defence.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'sha256-Lo3O4odfAEvXK6y89J+BN1c+RjQtJ6cAnO4NR87ghHg=' https://api.proappstore.online https://static.cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />

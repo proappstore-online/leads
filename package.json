@@ -16,6 +16,6 @@
     "build": "pnpm --filter @leads/web build",
     "preview": "pnpm --filter @leads/web preview",
     "typecheck": "pnpm --filter @leads/web exec tsc -b",
-    "test": "pnpm --filter @leads/web exec tsc -b && node --no-warnings qa/actions.mjs"
+    "test": "pnpm --filter @leads/web exec tsc -b && node --no-warnings qa/actions.mjs && node --no-warnings qa/csp.mjs"
   }
 }
