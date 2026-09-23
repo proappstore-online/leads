@@ -77,9 +77,11 @@ function describe(e: Activity): string {
 }
 
 /** Charts and activity: what came in, what agents did, and where the pipeline stands. */
-export function StatsPage({ lists, sources, version, onOpenLead }: {
+export function StatsPage({ lists, sources, projectId, version, onOpenLead }: {
   lists: LeadList[]
   sources: Source[]
+  /** The current project, or null for every project — everything here is scoped to it. */
+  projectId: string | null
   /** Bumped by the parent after any save, so the page reloads. */
   version: number
   onOpenLead: (id: string) => void
@@ -98,8 +100,8 @@ export function StatsPage({ lists, sources, version, onOpenLead }: {
   // A list is addressed by its project (#4).
   const filters = useMemo(() => {
     const list = lists.find((l) => l.id === listId)
-    return { source_id: sourceId || null, list_id: list ? list.id : null, project_id: list ? projectOf(list) : null }
-  }, [sourceId, listId, lists])
+    return { source_id: sourceId || null, list_id: list ? list.id : null, project_id: list ? projectOf(list) : projectId }
+  }, [sourceId, listId, lists, projectId])
 
   useEffect(() => {
     let live = true
@@ -122,14 +124,14 @@ export function StatsPage({ lists, sources, version, onOpenLead }: {
   const loadFeed = useCallback(async (last: Activity | null) => {
     const id = ++feedRequest.current
     try {
-      const rows = await q<Activity>('recent_activity', { limit: FEED_PAGE, before: last?.at ?? null, before_k: last?.k ?? null, source_id: sourceId || null })
+      const rows = await q<Activity>('recent_activity', { limit: FEED_PAGE, before: last?.at ?? null, before_k: last?.k ?? null, source_id: sourceId || null, project_id: projectId })
       if (id !== feedRequest.current) return // a newer request (other filter) superseded this one
       setFeed((prev) => (last ? [...prev, ...rows] : rows))
       setFeedMore(rows.length === FEED_PAGE)
     } catch (e) {
       if (id === feedRequest.current) setError(e instanceof Error ? e.message : String(e))
     }
-  }, [sourceId])
+  }, [sourceId, projectId])
 
   useEffect(() => { loadFeed(null) }, [loadFeed, version])
 

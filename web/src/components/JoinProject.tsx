@@ -16,7 +16,8 @@ export function JoinProject({ code, userName, onClose, onJoined }: {
   /** Your name, shown to the project owner. */
   userName: string
   onClose: () => void
-  onJoined: () => void
+  /** The project just joined — the app switches to it. */
+  onJoined: (projectId: string) => void
 }) {
   const [invite, setInvite] = useState<Invite | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
@@ -32,7 +33,7 @@ export function JoinProject({ code, userName, onClose, onJoined }: {
     setSaving(true)
     try {
       await x('join_project', { code, display_name: userName || null })
-      onJoined()
+      onJoined(invite!.project_id)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setSaving(false)

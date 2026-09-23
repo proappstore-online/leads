@@ -12,12 +12,10 @@ interface Invite {
 const inviteLink = (code: string) => `${location.origin}/?join=${code}`
 
 /** Create or manage a project: name, members and invite links. A project you joined only offers Leave. */
-export function ProjectForm({ project, ownerName, listCount, onClose, onSaved, onDeleted, onChanged }: {
+export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, onChanged }: {
   project: Project | null
   /** Your name, shown to the people you invite. */
   ownerName: string
-  /** How many of your lists are in this project — it can only be deleted once it has none. */
-  listCount: number
   onClose: () => void
   onSaved: (id: string) => void
   onDeleted: () => void
@@ -27,6 +25,8 @@ export function ProjectForm({ project, ownerName, listCount, onClose, onSaved, o
   const [name, setName] = useState(project?.name ?? '')
   const [description, setDescription] = useState(project?.description ?? '')
   const [members, setMembers] = useState<ProjectMember[]>([])
+  /** A project can only be deleted once it has no lists. */
+  const [listCount, setListCount] = useState(0)
   const [invites, setInvites] = useState<Invite[]>([])
   const [copied, setCopied] = useState('')
   const [saving, setSaving] = useState(false)
@@ -35,12 +35,14 @@ export function ProjectForm({ project, ownerName, listCount, onClose, onSaved, o
 
   const loadTeam = useCallback(async () => {
     if (!project?.is_owner) return
-    const [m, i] = await Promise.all([
+    const [m, i, lists] = await Promise.all([
       q<ProjectMember>('list_project_members', { project_id: project.id }),
       q<Invite>('list_project_invites', { project_id: project.id }),
+      q<{ id: string }>('list_lists', { project_id: project.id }),
     ])
     setMembers(m)
     setInvites(i)
+    setListCount(lists.length)
   }, [project])
 
   useEffect(() => {
