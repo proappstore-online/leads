@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { q, x } from '../lib/actions'
+import { fieldLabel, formatValue, when } from '../lib/history'
 import type { HistoryEntry, Lead, Source } from '../types'
 import { inputClass } from './styles'
-
-const LABELS: Record<string, string> = {
-  status: 'Status', fit: 'Fit', notes: 'Notes', next_action_at: 'Follow-up', next_action: 'Next action', assigned_to_user_id: 'Assigned to',
-  needs_attention: 'Needs attention', attention_reason: 'Attention reason', tags: 'Tags', custom_fields: 'Custom fields', source_id: 'Found in',
-  source_url: 'Found-in post', found_at: 'Found', email: 'Email', phone: 'Phone', website: 'Website', location: 'Location', country: 'Country',
-  name: 'Name', title: 'Title', company: 'Company', linkedin: 'LinkedIn', twitter: 'X', instagram: 'Instagram', facebook: 'Facebook',
-  tiktok: 'TikTok', youtube: 'YouTube', github: 'GitHub',
-}
-
-const when = (ms: number) => new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 /** A lead's timestamped notes and changes, newest first, with a box to add a note. */
 export function LeadHistory({ lead, people, sources, onChanged }: {
@@ -52,17 +43,7 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
     }
   }
 
-  function show(field: string, value: unknown): string {
-    if (value === null || value === undefined || value === '') return '—'
-    if (field === 'next_action_at' || field === 'found_at') return when(Number(value))
-    if (field === 'assigned_to_user_id') return people.get(String(value)) ?? 'someone'
-    if (field === 'needs_attention') return value ? 'flagged' : 'cleared'
-    if (field === 'source_id') return sources.find((s) => s.id === value)?.name ?? 'a source'
-    if (Array.isArray(value)) return value.join(', ')
-    if (typeof value === 'object') return Object.entries(value).map(([k, v]) => `${k}: ${v}`).join(', ')
-    const text = String(value)
-    return text.length > 200 ? `${text.slice(0, 200)}…` : text
-  }
+  const show = (field: string, value: unknown) => formatValue(field, value, { people, sources })
 
   return (
     <div className="mt-4 space-y-4">
@@ -91,7 +72,7 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
                   </details>
                 ) : (
                   <p key={field} className="mt-0.5 text-[var(--ink)] [overflow-wrap:anywhere]">
-                    <span className="font-semibold">{LABELS[field] ?? field}</span>: <span className="text-[var(--muted)]">{show(field, from)}</span> → {show(field, to)}
+                    <span className="font-semibold">{fieldLabel(field)}</span>: <span className="text-[var(--muted)]">{show(field, from)}</span> → {show(field, to)}
                   </p>
                 ))}
               </li>

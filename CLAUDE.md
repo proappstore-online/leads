@@ -81,8 +81,11 @@ no duplicate email / profile URL; message writes check `platform`/`direction`. T
 tell agents what `changes: 0` means and which tool explains it (`check_lead_links`, `find_lead`).
 Params are bound once through a `FROM (SELECT :x AS x, …) AS p` subquery — D1 allows 100 binds.
 
-Reporting (`stats_timeline`, `stats_pipeline`, `recent_activity`) is derived from row
-timestamps, so `recent_activity` only shows a lead's latest edit. Per-lead history is
+Reporting (`stats_timeline`, `stats_pipeline`) is derived from row timestamps. `recent_activity`
+reads each event's own time (#12): changes and notes come one per `leads.history` entry with its
+`at`, never the lead's `updated_at`; an entry written without one falls back to the lead's
+`created_at` and says so through `at_known` 0, so nothing looks more recent than it was. The
+row-level `flagged` branch only carries flags from before history existed. Per-lead history is
 `leads.history`: a JSON array (capped at 300) appended by the same `UPDATE` that makes the change -
 triggers are rejected and a second statement would turn the action into a batch, whose result has
 no top-level `changes`. Any new lead write must append to it like the existing ones, and lead reads
@@ -100,11 +103,14 @@ A pasted URL must never widen a card, row or modal (#10). Links go through
 tooltip keep the whole URL; free text that can hold one (notes, an attention reason, a follow-up,
 a list purpose) carries `wrapAnywhere` from `components/styles.ts`. A chip or flex item also needs
 `min-w-0`, and a `<fieldset>` needs it too - it defaults to `min-width: min-content`.
+`node qa/actions.mjs` (part of `pnpm test`) runs the real actions against a SQLite built from
+`migrations.json` - no browser, no dependencies - and is the place for action regressions.
 `pnpm --filter @leads/web qa:overflow` renders the app against fixtures full of extreme URLs and
 fails if any page or modal scrolls sideways at 320px or 375px (`web/qa/`, needs a local Chromium;
 not part of CI). `qa:sorting` does the same for the sort controls (#11): both views that used to
 pin their own order - Assigned to me and Follow-ups due - now open on a sensible sort and then
-follow the controls, so `list_assigned_leads` takes `sort`/`dir` like `list_leads`.
+follow the controls, so `list_assigned_leads` takes `sort`/`dir` like `list_leads`. `qa:activity`
+covers the feed's event times.
 
 Agent-facing conventions live in the `how_to_use` action — update it when a rule changes.
 Every action must bind at least one param (hence its `WHERE :__user_id IS NOT NULL`): the data

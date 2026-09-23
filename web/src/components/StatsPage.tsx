@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { q } from '../lib/actions'
+import { summariseChanges, type HistoryNames } from '../lib/history'
 import { projectOf } from '../lib/lead'
 import { FITS, STATUSES, type LeadList, type Source } from '../types'
 import { BarChart } from './BarChart'
@@ -16,11 +17,15 @@ interface Bucket {
 type Pipeline = Record<string, number>
 
 interface Activity {
-  kind: 'lead_added' | 'lead_updated' | 'messages_recorded' | 'flagged' | 'source_added'
+  kind: 'lead_added' | 'lead_changed' | 'lead_note' | 'messages_recorded' | 'flagged' | 'source_added'
+  /** When the event happened, not when its lead was last touched. */
   at: number
+  /** 0 when that time was never recorded and `at` falls back to the lead's creation. */
+  at_known: number
   lead_id: string | null
   lead_name: string | null
   source_name: string | null
+  /** For lead_changed a JSON object of field: [old, new]; for lead_note the note. */
   detail: string | null
   /** Tie-breaker for paging events that share a timestamp. */
   k: string
@@ -66,10 +71,11 @@ function buckets(range: RangeKey): { pairs: [number, number][]; labels: string[]
 
 const FEED_PAGE = 50
 
-function describe(e: Activity): string {
+function describe(e: Activity, names: HistoryNames): string {
   switch (e.kind) {
     case 'lead_added': return `Added lead${e.detail ? ` — ${e.detail}` : ''}`
-    case 'lead_updated': return `Updated lead — ${e.detail}`
+    case 'lead_changed': return summariseChanges(e.detail, names)
+    case 'lead_note': return `Note — ${e.detail ?? ''}`
     case 'messages_recorded': return `Recorded ${e.detail?.replace(/^(\d+)/, '$1 messages')}`
     case 'flagged': return `Flagged for attention — ${e.detail ?? ''}`
     case 'source_added': return `Added source (${e.detail})`
@@ -77,9 +83,11 @@ function describe(e: Activity): string {
 }
 
 /** Charts and activity: what came in, what agents did, and where the pipeline stands. */
-export function StatsPage({ lists, sources, projectId, version, onOpenLead }: {
+export function StatsPage({ lists, sources, people, projectId, version, onOpenLead }: {
   lists: LeadList[]
   sources: Source[]
+  /** Names by user id, for a change that reassigned a lead. */
+  people: Map<string, string>
   /** The current project, or null for every project — everything here is scoped to it. */
   projectId: string | null
   /** Bumped by the parent after any save, so the page reloads. */
@@ -97,6 +105,7 @@ export function StatsPage({ lists, sources, projectId, version, onOpenLead }: {
   const [error, setError] = useState('')
 
   const { pairs, labels } = useMemo(() => buckets(range), [range])
+  const names = useMemo<HistoryNames>(() => ({ people, sources }), [people, sources])
   // A list is addressed by its project (#4).
   const filters = useMemo(() => {
     const list = lists.find((l) => l.id === listId)
@@ -224,15 +233,20 @@ export function StatsPage({ lists, sources, projectId, version, onOpenLead }: {
 
       <section className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4">
         <h2 className="text-sm font-semibold text-[var(--ink)]">Recent activity</h2>
-        <p className="text-xs text-[var(--muted)]">Newest first. For an edited lead only its latest change is known.</p>
+        <p className="text-xs text-[var(--muted)]">Newest first, each at the time it happened. Changes and notes start when the lead history was added; older edits are not listed.</p>
         {feed.length === 0 ? (
           <p className="mt-3 text-sm text-[var(--muted)]">Nothing yet.</p>
         ) : (
           <ol className="mt-2 divide-y divide-[var(--line)]">
             {feed.map((e) => (
               <li key={e.k + e.at} className="flex gap-3 py-2 text-sm">
-                <time dateTime={new Date(e.at).toISOString()} className="w-28 shrink-0 text-xs tabular-nums text-[var(--muted)]">
+                <time
+                  dateTime={new Date(e.at).toISOString()}
+                  title={e.at_known === 0 ? 'The time of this one was never recorded — shown at the lead\'s creation' : undefined}
+                  className="w-28 shrink-0 text-xs tabular-nums text-[var(--muted)]"
+                >
                   {new Date(e.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {e.at_known === 0 && <span className="block not-italic opacity-80">time not recorded</span>}
                 </time>
                 <div className="min-w-0 select-text [overflow-wrap:anywhere]">
                   {e.lead_id ? (
@@ -240,7 +254,7 @@ export function StatsPage({ lists, sources, projectId, version, onOpenLead }: {
                   ) : (
                     <span className="font-semibold text-[var(--ink)]">{e.source_name}</span>
                   )}
-                  <span className="text-[var(--muted)]"> · {describe(e)}</span>
+                  <span className="text-[var(--muted)]"> · {describe(e, names)}</span>
                   {e.lead_id && e.source_name && <span className="block truncate text-xs text-[var(--muted)]">from {e.source_name}</span>}
                 </div>
               </li>

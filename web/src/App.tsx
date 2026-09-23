@@ -373,7 +373,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       </nav>
 
       {view === 'stats' ? (
-        <StatsPage lists={lists} sources={sources} projectId={scope} version={version} onOpenLead={openLeadById} />
+        <StatsPage lists={lists} sources={sources} people={people} projectId={scope} version={version} onOpenLead={openLeadById} />
       ) : view === 'sources' ? (
       <main className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">

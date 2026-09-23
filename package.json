@@ -2,14 +2,20 @@
   "name": "leads",
   "private": true,
   "packageManager": "pnpm@10.30.3",
-  "engines": { "node": ">=22" },
-  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
+  "engines": {
+    "node": ">=22"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "scripts": {
     "dev": "pnpm --filter @leads/web dev",
     "prebuild": "npx -y @proappstore/cli@latest check",
     "build": "pnpm --filter @leads/web build",
     "preview": "pnpm --filter @leads/web preview",
     "typecheck": "pnpm --filter @leads/web exec tsc -b",
-    "test": "pnpm --filter @leads/web exec tsc -b"
+    "test": "pnpm --filter @leads/web exec tsc -b && node --no-warnings qa/actions.mjs"
   }
 }
