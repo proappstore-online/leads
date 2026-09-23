@@ -405,7 +405,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : followUpsOnly ? 'Follow-ups due' : assignedOnly ? 'Assigned to me' : current?.name ?? 'All leads'}</h1>
-            {current?.purpose && <p className="mt-0.5 text-sm text-[var(--muted)]">{current.purpose}</p>}
+            {current?.purpose && <p className="mt-0.5 text-sm text-[var(--muted)] [overflow-wrap:anywhere]">{current.purpose}</p>}
             {followUpsOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Open leads whose follow-up is due by tonight, soonest first. Filter by Follow-up: none set to find leads going cold.</p>}
             {assignedOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Your own leads assigned to you, and leads shared with you through projects you joined.</p>}
           </div>

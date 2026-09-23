@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { q } from '../lib/actions'
 import { STATUSES, type Lead, type SourceDetail } from '../types'
+import { ExternalLink } from './ExternalLink'
 import { Modal } from './Modal'
+import { wrapAnywhere } from './styles'
 
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
 
@@ -54,10 +56,10 @@ export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, o
         <div className="mt-2 space-y-5 select-text">
           <div className="text-sm text-[var(--muted)]">
             {source.kind}
-            {source.url && <> · <a href={source.url} target="_blank" rel="noreferrer" className="break-all text-[var(--sky-deep)] underline-offset-4 hover:underline">{source.url}</a></>}
+            {source.url && <> · <ExternalLink href={source.url} /></>}
             <> · added {date(source.created_at)}</>
           </div>
-          {source.notes && <p className="whitespace-pre-wrap rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-3 text-sm text-[var(--ink)]">{source.notes}</p>}
+          {source.notes && <p className={`whitespace-pre-wrap rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-3 text-sm text-[var(--ink)] ${wrapAnywhere}`}>{source.notes}</p>}
 
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {tiles.map(([label, value]) => (

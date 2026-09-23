@@ -234,7 +234,7 @@ export function StatsPage({ lists, sources, projectId, version, onOpenLead }: {
                 <time dateTime={new Date(e.at).toISOString()} className="w-28 shrink-0 text-xs tabular-nums text-[var(--muted)]">
                   {new Date(e.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </time>
-                <div className="min-w-0 select-text">
+                <div className="min-w-0 select-text [overflow-wrap:anywhere]">
                   {e.lead_id ? (
                     <button type="button" onClick={() => onOpenLead(e.lead_id!)} className={`font-semibold hover:underline ${e.kind === 'flagged' ? 'text-[var(--warning)]' : 'text-[var(--ink)]'}`}>{e.lead_name}</button>
                   ) : (

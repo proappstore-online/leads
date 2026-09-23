@@ -1,23 +1,20 @@
 import type { ReactNode } from 'react'
 import { countryName } from '../lib/countries'
+import { ExternalLink, linkClass } from './ExternalLink'
+import { wrapAnywhere } from './styles'
 import { isDue, leadCustomFields, leadTags } from '../lib/lead'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList } from '../types'
 
-const linkClass = 'break-all text-[var(--sky-deep)] underline-offset-4 hover:underline'
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null)
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-1.5 text-sm">
       <dt className="text-[var(--muted)]">{label}</dt>
-      <dd className="min-w-0 text-[var(--ink)]">{children}</dd>
+      <dd className={`text-[var(--ink)] ${wrapAnywhere}`}>{children}</dd>
     </div>
   )
-}
-
-function External({ href, children }: { href: string; children: ReactNode }) {
-  return <a href={href} target="_blank" rel="noreferrer" className={linkClass}>{children}</a>
 }
 
 /** Read-only lead: every filled field, with contact details and links clickable. Empty fields are left out. */
@@ -33,8 +30,8 @@ export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[
           <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
             <span className="rounded-full bg-[var(--line)] px-2 py-0.5 font-semibold capitalize text-[var(--ink)]">{lead.status}</span>
             {lead.fit && <span className="rounded-full bg-[var(--line)] px-2 py-0.5 font-semibold capitalize text-[var(--ink)]">{lead.fit} fit</span>}
-            {listNames.map((n) => <span key={n} className="rounded-full border border-[var(--line-strong)] px-2 py-0.5 text-[var(--muted)]">{n}</span>)}
-            {leadTags(lead).map((t) => <span key={t} className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-medium text-[var(--accent-deep)]">#{t}</span>)}
+            {listNames.map((n) => <span key={n} className="min-w-0 max-w-full truncate rounded-full border border-[var(--line-strong)] px-2 py-0.5 text-[var(--muted)]">{n}</span>)}
+            {leadTags(lead).map((t) => <span key={t} className="min-w-0 max-w-full truncate rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-medium text-[var(--accent-deep)]">#{t}</span>)}
           </p>
         </div>
         {onEdit && <button type="button" onClick={onEdit} className="shrink-0 rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--line)]">Edit</button>}
@@ -53,22 +50,22 @@ export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[
         </Row>
         {lead.email && <Row label="Email"><a href={`mailto:${lead.email}`} className={linkClass}>{lead.email}</a></Row>}
         {lead.phone && <Row label="Phone"><a href={`tel:${lead.phone}`} className={linkClass}>{lead.phone}</a></Row>}
-        {lead.website && <Row label="Website"><External href={websiteUrl(lead.website)}>{lead.website}</External></Row>}
+        {lead.website && <Row label="Website"><ExternalLink href={websiteUrl(lead.website)}>{lead.website}</ExternalLink></Row>}
         {profiles.map(({ key, label, domains }) => {
           const value = lead[key]!
           return (
             <Row key={key} label={label}>
-              {isProfileLink(domains, value) ? <External href={value}>{value.replace(/^https:\/\/(www\.)?/, '')}</External> : <span className="text-[var(--warning)]">{value} (not a link)</span>}
+              {isProfileLink(domains, value) ? <ExternalLink href={value}>{value.replace(/^https:\/\/(www\.)?/, '')}</ExternalLink> : <span className="text-[var(--warning)]">{value} (not a link)</span>}
             </Row>
           )
         })}
         {(lead.source_name || lead.source || lead.source_url) && (
           <Row label="Found in">
             {lead.source_name
-              ? (lead.source_link ? <External href={lead.source_link}>{lead.source_name}</External> : lead.source_name)
+              ? (lead.source_link ? <ExternalLink href={lead.source_link}>{lead.source_name}</ExternalLink> : lead.source_name)
               : lead.source}
             {lead.source_kind && <span className="text-[var(--muted)]"> ({lead.source_kind})</span>}
-            {lead.source_url && <> · <External href={lead.source_url}>the post</External></>}
+            {lead.source_url && <> · <ExternalLink href={lead.source_url}>the post</ExternalLink></>}
           </Row>
         )}
         {lead.found_at && <Row label="Found">{date(lead.found_at)}</Row>}
@@ -80,7 +77,7 @@ export function LeadView({ lead, lists, onEdit }: { lead: Lead; lists: LeadList[
       {lead.notes && (
         <div className="mt-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Notes</h3>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink)]">{lead.notes}</p>
+          <p className={`mt-1 whitespace-pre-wrap text-sm text-[var(--ink)] ${wrapAnywhere}`}>{lead.notes}</p>
         </div>
       )}
     </div>

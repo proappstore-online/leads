@@ -57,7 +57,7 @@ export function LeadBoard({ leads, people, onOpen, onMove }: {
                   {(lead.title || lead.company) && <div className="truncate text-xs text-[var(--muted)]">{[lead.title, lead.company].filter(Boolean).join(' · ')}</div>}
                   {lead.tags && (
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {leadTags(lead).map((t) => <span key={t} className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-deep)]">#{t}</span>)}
+                      {leadTags(lead).map((t) => <span key={t} className="min-w-0 max-w-full truncate rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-deep)]">#{t}</span>)}
                     </div>
                   )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">

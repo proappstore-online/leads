@@ -1,9 +1,10 @@
 import { countryName } from '../lib/countries'
+import { ExternalLink, linkClass } from './ExternalLink'
+import { wrapAnywhere } from './styles'
 import { isDue, leadTags } from '../lib/lead'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList, Project, Sort, SortKey } from '../types'
 
-const linkClass = 'text-[var(--sky-deep)] underline-offset-4 hover:underline'
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
 
 const SORTS: [SortKey, string][] = [['name', 'Name'], ['email', 'Contact'], ['fit', 'Fit'], ['next_action', 'Follow-up'], ['last_contact', 'Last contact'], ['last_reply', 'Last reply'], ['status', 'Status']]
@@ -42,7 +43,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
         {lead.needs_attention ? <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--paper)]">Needs attention</span> : null}
       </div>
       {lead.shared ? <div className="text-xs font-medium text-[var(--accent-deep)]">{sharedVia(lead)}</div> : null}
-      {lead.needs_attention && lead.attention_reason ? <div className="text-xs font-medium text-[var(--warning)]">{lead.attention_reason}</div> : null}
+      {lead.needs_attention && lead.attention_reason ? <div className={`text-xs font-medium text-[var(--warning)] ${wrapAnywhere}`}>{lead.attention_reason}</div> : null}
       <div className="text-xs text-[var(--muted)]">
         {[lead.title, lead.company, lead.location].filter(Boolean).join(' · ')}
         {lead.country
@@ -50,17 +51,17 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
           : <span title="Country not confirmed" className="ml-1.5 font-semibold text-[var(--warning)]">country?</span>}
       </div>
       {(lead.source_name || lead.source || lead.source_url) && (
-        <div className="text-xs text-[var(--muted)]" onClick={(e) => e.stopPropagation()}>
+        <div className={`text-xs text-[var(--muted)] ${wrapAnywhere}`} onClick={(e) => e.stopPropagation()}>
           Found in:{' '}
           {lead.source_name
-            ? (lead.source_link ? <a href={lead.source_link} target="_blank" rel="noreferrer" className={linkClass}>{lead.source_name}</a> : lead.source_name)
+            ? (lead.source_link ? <ExternalLink href={lead.source_link}>{lead.source_name}</ExternalLink> : lead.source_name)
             : lead.source ?? 'unknown'}
-          {lead.source_url && <> · <a href={lead.source_url} target="_blank" rel="noreferrer" className={linkClass}>post</a></>}
+          {lead.source_url && <> · <ExternalLink href={lead.source_url}>post</ExternalLink></>}
         </div>
       )}
       {lead.tags && (
         <div className="mt-1 flex flex-wrap gap-1">
-          {leadTags(lead).map((t) => <span key={t} className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-deep)]">#{t}</span>)}
+          {leadTags(lead).map((t) => <span key={t} className="min-w-0 max-w-full truncate rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--accent-deep)]">#{t}</span>)}
         </div>
       )}
     </>
@@ -68,13 +69,13 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
 
   const profiles = (lead: Lead) => (
     <>
-      {lead.website && <a href={websiteUrl(lead.website)} target="_blank" rel="noreferrer" className={linkClass}>Web</a>}
+      {lead.website && <ExternalLink href={websiteUrl(lead.website)}>Web</ExternalLink>}
       {SOCIALS.map(({ key, label, domains }) => {
         const value = lead[key]
         if (!value) return null
         // Values saved before links were enforced (a name, a handle) are flagged, not linked.
         return isProfileLink(domains, value)
-          ? <a key={key} href={value} target="_blank" rel="noreferrer" className={linkClass}>{label}</a>
+          ? <ExternalLink key={key} href={value}>{label}</ExternalLink>
           : <span key={key} title={`Not a link: "${value}". Open the lead and paste the profile URL.`} className="text-[var(--warning)]">{label}: no link</span>
       })}
     </>
@@ -115,7 +116,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
                 <span className="rounded-full bg-[var(--line)] px-2 py-0.5 font-semibold capitalize text-[var(--ink)]">{lead.status}</span>
                 {lead.fit && <span className={`font-semibold capitalize ${fitClass(lead)}`}>{lead.fit} fit</span>}
-                {lead.next_action_at && <span>follow up {followUp(lead)}{lead.next_action ? ` · ${lead.next_action}` : ''}</span>}
+                {lead.next_action_at && <span className={wrapAnywhere}>follow up {followUp(lead)}{lead.next_action ? ` · ${lead.next_action}` : ''}</span>}
                 <span>last contact {date(lead.last_message_at)}</span>
                 {lead.last_reply_at && <span>reply {date(lead.last_reply_at)}</span>}
                 {assignee(lead) && <span>→ {assignee(lead)}</span>}

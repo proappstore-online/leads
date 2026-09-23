@@ -8,7 +8,7 @@ import { Conversation } from './Conversation'
 import { LeadHistory } from './LeadHistory'
 import { LeadView } from './LeadView'
 import { Modal } from './Modal'
-import { inputClass } from './styles'
+import { inputClass, wrapAnywhere } from './styles'
 
 
 const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholder?: string }[] = [
@@ -210,7 +210,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
             <div className="text-xs font-bold uppercase tracking-wider text-[var(--warning)]">
               Needs attention{attention.at ? ` · ${new Date(attention.at).toLocaleString()}` : ''}
             </div>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--ink)]">{attention.reason}</p>
+            <p className={`mt-1 whitespace-pre-wrap text-sm text-[var(--ink)] ${wrapAnywhere}`}>{attention.reason}</p>
           </div>
           {!shared && <button type="button" disabled={saving} onClick={() => setFlag('clear_needs_attention')} className="shrink-0 rounded-xl bg-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Mark handled</button>}
         </div>
@@ -222,7 +222,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
       ))}
       {lead && (shared ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span className="text-[var(--muted)]">Assigned to you{sharedIn ? ` in ${sharedIn.name}, shared by ${sharedIn.owner_name ?? 'its owner'}` : ' in a shared project'}</span>
+          <span className={`text-[var(--muted)] ${wrapAnywhere}`}>Assigned to you{sharedIn ? ` in ${sharedIn.name}, shared by ${sharedIn.owner_name ?? 'its owner'}` : ' in a shared project'}</span>
           <select aria-label="Status" value={status} disabled={saving} onChange={(e) => saveInPlace('set_lead_status', { status: e.target.value }, 'Not saved - this lead is no longer assigned to you.')} className={`${inputClass} mt-0 w-auto capitalize`}>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -301,7 +301,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
           ))}
         </div>
 
-        <fieldset>
+        <fieldset className="min-w-0">
           <legend className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Social profiles — links only</legend>
           <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {SOCIALS.map(({ key, label, domains, example }) => (
@@ -322,7 +322,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
         </fieldset>
 
         {lists.length > 0 && (
-          <fieldset>
+          <fieldset className="min-w-0">
             <legend className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Lists</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {lists.map((list) => (
@@ -331,7 +331,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
                   type="button"
                   aria-pressed={selected.has(list.id)}
                   onClick={() => toggleList(list.id)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${selected.has(list.id) ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'border-[var(--line-strong)] text-[var(--muted)]'}`}
+                  className={`min-w-0 max-w-full truncate rounded-full border px-3 py-1.5 text-xs font-semibold ${selected.has(list.id) ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'border-[var(--line-strong)] text-[var(--muted)]'}`}
                 >
                   {list.name}
                 </button>
@@ -345,7 +345,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
           <input type="text" value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="investor, warm intro" className={inputClass} />
         </label>
 
-        <fieldset>
+        <fieldset className="min-w-0">
           <legend className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Your fields</legend>
           <div className="mt-2 space-y-2">
             {customRows.map(([key, value], i) => (

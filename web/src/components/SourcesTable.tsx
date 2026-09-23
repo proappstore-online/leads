@@ -1,6 +1,5 @@
 import type { Source } from '../types'
-
-const linkClass = 'text-[var(--sky-deep)] underline-offset-4 hover:underline'
+import { ExternalLink } from './ExternalLink'
 
 /** Per-source performance. Clicking a row opens the source; the No source row lists leads without one. */
 export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
@@ -23,7 +22,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
                 <div className="break-words font-semibold text-[var(--ink)]">{s.name}</div>
                 <div className="text-xs text-[var(--muted)]">
                   {s.kind}
-                  {s.url && <> · <a href={s.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className={linkClass}>Open group</a></>}
+                  {s.url && <> · <span onClick={(e) => e.stopPropagation()}><ExternalLink href={s.url}>Open group</ExternalLink></span></>}
                   {s.needs_attention > 0 && <span className="ml-2 font-semibold text-[var(--warning)]">{s.needs_attention} need attention</span>}
                 </div>
               </div>
@@ -64,7 +63,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
               <tr key={s.id} onClick={() => onOpen(s.id)} className="cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--glass-hover)]">
                 <td className="px-4 py-3">
                   <div className="font-semibold text-[var(--ink)]">
-                    {s.url ? <a href={s.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className={linkClass}>{s.name}</a> : s.name}
+                    {s.url ? <span onClick={(e) => e.stopPropagation()}><ExternalLink href={s.url}>{s.name}</ExternalLink></span> : s.name}
                   </div>
                   <div className="text-xs text-[var(--muted)]">
                     {s.kind}

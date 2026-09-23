@@ -93,6 +93,17 @@ builds local-time buckets client-side and passes them as JSON `[start, end)` pai
 colours are `--series-1` / `--series-2` in `index.css`, validated for CVD and contrast in both
 themes - keep them if you add a chart.
 
+## Long values in the UI
+
+A pasted URL must never widen a card, row or modal (#10). Links go through
+`web/src/components/ExternalLink.tsx`, which cuts the label with an ellipsis while `href` and the
+tooltip keep the whole URL; free text that can hold one (notes, an attention reason, a follow-up,
+a list purpose) carries `wrapAnywhere` from `components/styles.ts`. A chip or flex item also needs
+`min-w-0`, and a `<fieldset>` needs it too - it defaults to `min-width: min-content`.
+`pnpm --filter @leads/web qa:overflow` renders the app against fixtures full of extreme URLs and
+fails if any page or modal scrolls sideways at 320px or 375px (`web/qa/`, needs a local Chromium;
+not part of CI).
+
 Agent-facing conventions live in the `how_to_use` action — update it when a rule changes.
 Every action must bind at least one param (hence its `WHERE :__user_id IS NOT NULL`): the data
 worker calls `.bind()` even with none, which D1 answers with a 500.
