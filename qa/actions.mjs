@@ -264,5 +264,51 @@ ok(again.every((c) => c === 0), `the same code cannot be redeemed twice (${again
 ok(call('list_project_members', O, { project_id: P }).filter((m) => m.user_id === S).length === 1, 'the owner sees the new member exactly once')
 ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code no longer resolves')
 
+// PAS-OPS-017 (platform#186): delete_my_data leaves NO row for that user in any table, and
+// nobody else's rows change except the two cross-user links it must sever (assignment, project
+// attachment). Runs AFTER the sweep so the owner's fixture is complete and the invariant above
+// has already been checked.
+{
+  const G = 'goner'
+  const GP = randomUUID(), GS = randomUUID(), GL = randomUUID(), GLIST = randomUUID(), GMSG = randomUUID()
+  call('create_project', G, { id: GP, name: 'Goner project' })
+  call('create_source', G, { id: GS, name: 'Goner source', kind: 'Reddit' })
+  call('create_lead', G, { id: GL, name: 'Goner lead', country: 'AU', source_id: GS })
+  call('create_list', G, { id: GLIST, name: 'Goner list', purpose: 'x', project_id: GP })
+  call('add_lead_to_list', G, { lead_id: GL, list_id: GLIST, project_id: GP })
+  call('add_message', G, { id: GMSG, lead_id: GL, platform: 'Email', direction: 'out', body: 'hi', occurred_at: now })
+  call('create_project_invite', G, { project_id: GP })
+  // Cross-user links: the goner is a member of the owner's project, is assigned one of the owner's
+  // leads, and the owner has a list attached to the goner's project.
+  db.prepare('INSERT INTO project_members (project_id, user_id, display_name, joined_at) VALUES (?, ?, ?, ?)').run(P, G, 'Goner', now)
+  db.prepare('UPDATE leads SET assigned_to_user_id = ? WHERE id = ?').run(G, OTHER)
+  const OL = randomUUID()
+  // Inserted directly: create_list rightly refuses a project the caller is not a member of.
+  db.prepare('INSERT INTO lists (id, user_id, name, purpose, created_at, project_id) VALUES (?, ?, ?, ?, ?, ?)').run(OL, O, 'Owner list in goner project', 'x', now, GP)
+  const ownerBefore = snapshot()
+  const rowsFor = (user) => Object.fromEntries(TABLES.map((t) => {
+    const col = t === 'project_invites' ? 'created_by' : 'user_id'
+    return [t, db.prepare(`SELECT count(*) AS n FROM ${t} WHERE ${col} = ?`).get(user).n]
+  }))
+  ok(Object.values(rowsFor(G)).some((n) => n > 0), 'fixture: the goner holds rows before deletion')
+
+  const wrong = call('delete_my_data', G, { confirm: 'delete my data' })
+  ok(wrong.every((c) => c === 0), `delete_my_data with the wrong phrase changes nothing (${wrong.join(',')})`)
+
+  const gone = call('delete_my_data', G, { confirm: 'DELETE MY DATA' })
+  ok(gone.some((c) => c > 0), `delete_my_data with the exact phrase deletes (${gone.join(',')})`)
+  const left = rowsFor(G)
+  ok(Object.values(left).every((n) => n === 0), `no row for the deleted user remains in any table (${JSON.stringify(left)})`)
+  ok(db.prepare('SELECT count(*) AS n FROM lead_lists WHERE lead_id = ? OR list_id = ?').get(GL, GLIST).n === 0, 'no memberships reference the deleted leads or lists')
+  ok(db.prepare('SELECT count(*) AS n FROM messages WHERE lead_id = ?').get(GL).n === 0, 'no messages reference the deleted leads')
+  ok(db.prepare('SELECT count(*) AS n FROM project_invites WHERE project_id = ?').get(GP).n === 0, 'no invites reference the deleted project')
+  ok(db.prepare('SELECT assigned_to_user_id FROM leads WHERE id = ?').get(OTHER).assigned_to_user_id === null, "the owner's lead assigned to the deleted user is unassigned, not deleted")
+  ok(db.prepare('SELECT project_id FROM lists WHERE id = ?').get(OL).project_id === null, "the owner's list attached to the deleted project is detached, not deleted")
+  const ownerAfter = snapshot()
+  const untouched = ['leads', 'lists', 'sources', 'messages', 'projects'].every((t) =>
+    [...ownerBefore[t]].filter((r) => { const row = JSON.parse(r); return (row.user_id === O) && !(t === 'leads' && row.id === OTHER) && !(t === 'lists' && row.id === OL) }).every((r) => ownerAfter[t].has(r)))
+  ok(untouched, "every other row of the owner's is still there, unchanged")
+}
+
 console.log(failures ? `\n${failures} check(s) failed` : `\nall checks passed`)
 process.exit(failures ? 1 : 0)

@@ -1519,6 +1519,30 @@
           "description": "Only leads in this project's lists ('none' = lists made before projects). Leave it out for every project"
         }
       }
+    },
+    {
+      "name": "delete_my_data",
+      "operation": "batch",
+      "requires_auth": true,
+      "description": "Delete EVERYTHING this account holds in Leads, permanently, in one transaction: your leads (with every message on them, their tags, custom fields and list memberships), your lists, your sources, the projects you own (with their invites and memberships), your memberships in other people's projects, and invites you created. Other members' leads that were assigned to you are unassigned and their lists attached to a project you owned are detached - never deleted. Nothing is retained afterwards and there is no undo. Requires confirm to be exactly the text DELETE MY DATA; any other value changes nothing and reports 0 changes on every statement. This does NOT delete your ProAppStore account itself (platform identity, usage and analytics aggregates, error logs - the platform prunes logs after 30 days and usage after 90): ask support@proappstore.online for that.",
+      "statements": [
+        "UPDATE leads SET assigned_to_user_id = NULL, updated_at = :__now WHERE assigned_to_user_id = :__user_id AND user_id <> :__user_id AND :confirm = 'DELETE MY DATA'",
+        "UPDATE lists SET project_id = NULL WHERE user_id <> :__user_id AND project_id IN (SELECT id FROM projects WHERE user_id = :__user_id) AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM project_invites WHERE (created_by = :__user_id OR project_id IN (SELECT id FROM projects WHERE user_id = :__user_id)) AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM project_members WHERE (user_id = :__user_id OR project_id IN (SELECT id FROM projects WHERE user_id = :__user_id)) AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM projects WHERE user_id = :__user_id AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM lead_lists WHERE (user_id = :__user_id OR lead_id IN (SELECT id FROM leads WHERE user_id = :__user_id) OR list_id IN (SELECT id FROM lists WHERE user_id = :__user_id)) AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM messages WHERE (user_id = :__user_id OR lead_id IN (SELECT id FROM leads WHERE user_id = :__user_id)) AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM leads WHERE user_id = :__user_id AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM lists WHERE user_id = :__user_id AND :confirm = 'DELETE MY DATA'",
+        "DELETE FROM sources WHERE user_id = :__user_id AND :confirm = 'DELETE MY DATA'"
+      ],
+      "params": {
+        "confirm": {
+          "type": "string",
+          "description": "Must be exactly: DELETE MY DATA"
+        }
+      }
     }
   ]
 }

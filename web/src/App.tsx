@@ -73,6 +73,25 @@ export default function App() {
     }
   }, [loaded, project, projects])
 
+  // PAS-OPS-017: whole-account deletion, from the profile menu. Typed confirmation, not a
+  // click: the batch itself refuses any other phrase, so a stray tap cannot delete anything.
+  async function deleteMyData() {
+    const phrase = 'DELETE MY DATA'
+    const typed = prompt(`This permanently deletes everything this account holds in Leads - leads, messages, lists, sources, projects and memberships. There is no undo.\n\nType ${phrase} to continue.`)
+    if (typed === null) return
+    if (typed.trim() !== phrase) { alert('Nothing was deleted: the confirmation text did not match.'); return }
+    try {
+      await x('delete_my_data', { confirm: phrase })
+      localStorage.removeItem(PROJECT_KEY)
+      alert('Your data in Leads has been deleted. Your ProAppStore account itself is unchanged - contact support@proappstore.online to delete that.')
+      setProject(null)
+      loadProjects()
+      changed()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   // ProShell's own signed-out gate is GitHub-only; ours offers Google too.
   if (!loading && !user) return <SignIn />
 
@@ -86,6 +105,7 @@ export default function App() {
     <ProShell
       app={app}
       appName="Leads"
+      menuItems={[{ label: 'Delete my data…', onClick: deleteMyData }]}
       renderTopbar={(ctx) => (
         <TopBar
           projects={projects}
