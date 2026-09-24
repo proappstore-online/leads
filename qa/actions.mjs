@@ -48,7 +48,21 @@ function bind(sql, resolved, user) {
     return '?'
   })
   if (values.length > 100) throw new Error(`${values.length} bound values, D1 allows 100`)
+  const terms = compoundTerms(sql)
+  if (terms > 5) throw new Error(`${terms} terms in one compound SELECT, D1 allows 5`)
   return [bound, values]
+}
+
+/** Most terms in any one compound SELECT (UNION/INTERSECT/EXCEPT at the same paren depth, outside strings). Local SQLite allows 500, D1 only 5 (#13). */
+function compoundTerms(sql) {
+  const frames = [0]
+  let max = 0
+  for (const [tok] of sql.matchAll(/'(?:[^']|'')*'|\(|\)|\b(?:UNION|INTERSECT|EXCEPT)\b/gi)) {
+    if (tok === '(') frames.push(0)
+    else if (tok === ')') frames.pop()
+    else if (tok[0] !== "'") max = Math.max(max, ++frames[frames.length - 1])
+  }
+  return max + 1
 }
 
 export function call(name, user, params = {}) {

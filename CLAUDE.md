@@ -80,6 +80,8 @@ returns `"changes": 0`. Every lead write checks links-only socials, `status`/`fi
 no duplicate email / profile URL; message writes check `platform`/`direction`. The descriptions
 tell agents what `changes: 0` means and which tool explains it (`check_lead_links`, `find_lead`).
 Params are bound once through a `FROM (SELECT :x AS x, …) AS p` subquery — D1 allows 100 binds.
+D1 also allows only 5 terms in one compound SELECT (`UNION ALL` ×4) - local SQLite allows 500, so
+`qa/actions.mjs` checks it (#13).
 
 Reporting (`stats_timeline`, `stats_pipeline`) is derived from row timestamps. `recent_activity`
 reads each event's own time (#12): changes and notes come one per `leads.history` entry with its
