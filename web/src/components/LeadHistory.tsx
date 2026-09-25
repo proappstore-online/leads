@@ -14,6 +14,9 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
 }) {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   const [note, setNote] = useState('')
+  // Keep this after a request failure: the server may have recorded the note before its response
+  // was lost, so a retry must identify the same mutation.
+  const [mutationId, setMutationId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -29,10 +32,13 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
 
   async function addNote(e: React.FormEvent) {
     e.preventDefault()
+    const clientMutationId = mutationId ?? crypto.randomUUID()
+    setMutationId(clientMutationId)
     setSaving(true)
     try {
-      await x('add_note', { id: lead.id, note: note.trim() })
+      await x('add_note', { id: lead.id, note: note.trim(), client_mutation_id: clientMutationId })
       setNote('')
+      setMutationId(null)
       onChanged()
       await load()
       setError('')
@@ -48,7 +54,7 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
   return (
     <div className="mt-4 space-y-4">
       <form onSubmit={addNote} className="flex gap-2">
-        <input type="text" aria-label="Add a note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note — what happened, what was agreed" className={`${inputClass} mt-0`} />
+        <input type="text" aria-label="Add a note" value={note} onChange={(e) => { setNote(e.target.value); setMutationId(null) }} placeholder="Add a note — what happened, what was agreed" className={`${inputClass} mt-0`} />
         <button type="submit" disabled={saving || !note.trim()} className="shrink-0 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-50">Add</button>
       </form>
       {error && <p className="text-sm text-[var(--error)]">{error}</p>}

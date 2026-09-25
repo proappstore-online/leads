@@ -142,7 +142,7 @@ ok(legacyRuntimeReferences.length === 0, 'only the explicit backfill and account
 
 // Four things happen to Alice, days apart, and the lead row is edited last of all.
 call('set_lead_status', O, { id: LEAD, status: 'contacted' })
-call('add_note', O, { id: LEAD, note: 'Called, wants a demo' })
+call('add_note', O, { id: LEAD, note: 'Called, wants a demo', client_mutation_id: randomUUID() })
 call('set_lead_status', O, { id: LEAD, status: 'replied' })
 call('flag_needs_attention', O, { id: LEAD, reason: 'Wants a call' })
 
@@ -200,6 +200,31 @@ ok(mine()[0].at === now - 2 * day, 'and it does not jump to the top of the feed'
 entries[2].at = times[2]
 db.prepare('UPDATE leads SET history = ? WHERE id = ?').run(JSON.stringify(entries), LEAD)
 
+// --- PAS-DATA-018: notes retain a caller retry key, but never expose it in normal reads --------
+const RETRY_LEAD = randomUUID()
+const RETRY_KEY = randomUUID()
+call('create_lead', O, { id: RETRY_LEAD, name: 'Retry Alice', country: 'AU' })
+const firstNote = call('add_note', O, { id: RETRY_LEAD, note: 'Called once', client_mutation_id: RETRY_KEY })
+const afterFirstNote = db.prepare('SELECT history, updated_at FROM leads WHERE id = ?').get(RETRY_LEAD)
+const retryNote = call('add_note', O, { id: RETRY_LEAD, note: 'Called once', client_mutation_id: RETRY_KEY })
+const afterRetryNote = db.prepare('SELECT history, updated_at FROM leads WHERE id = ?').get(RETRY_LEAD)
+const retryHistory = call('get_lead_history', O, { id: RETRY_LEAD })
+const retryActivity = call('recent_activity', O, { limit: 50 })
+ok(firstNote === 1 && retryNote === 0, `the exact note retry changes once (${firstNote}, ${retryNote})`)
+ok(afterFirstNote.history === afterRetryNote.history && afterFirstNote.updated_at === afterRetryNote.updated_at, 'a duplicate retry leaves the durable note and lead timestamp unchanged')
+ok(JSON.parse(afterRetryNote.history).filter((entry) => entry.note === 'Called once').length === 1, 'a retry leaves exactly one durable note')
+ok(JSON.parse(afterRetryNote.history).some((entry) => entry.client_mutation_id === RETRY_KEY) && !JSON.stringify(retryHistory).includes(RETRY_KEY) && !JSON.stringify(retryActivity).includes(RETRY_KEY), 'the retry key is stored in history but absent from normal history and activity reads')
+const anotherNote = call('add_note', O, { id: RETRY_LEAD, note: 'Called once', client_mutation_id: randomUUID() })
+ok(anotherNote === 1 && call('get_lead_history', O, { id: RETRY_LEAD }).filter((entry) => entry.note === 'Called once').length === 2, 'different mutations retain intentionally repeated note text')
+const CONTENDED_KEY = randomUUID()
+const contenders = [
+  call('add_note', O, { id: RETRY_LEAD, note: 'Concurrent retry', client_mutation_id: CONTENDED_KEY }),
+  call('add_note', O, { id: RETRY_LEAD, note: 'Concurrent retry', client_mutation_id: CONTENDED_KEY }),
+]
+ok(JSON.stringify(contenders) === JSON.stringify([1, 0]) && JSON.parse(db.prepare('SELECT history FROM leads WHERE id = ?').get(RETRY_LEAD).history).filter((entry) => entry.client_mutation_id === CONTENDED_KEY).length === 1, 'contending same-key writes serialize to one note through the atomic update guard')
+const tooLongKey = 'x'.repeat(129)
+ok(call('add_note', O, { id: RETRY_LEAD, note: 'Refused', client_mutation_id: tooLongKey }) === 0, 'a mutation key over 128 characters is refused')
+
 // Paging walks the same order.
 const page1 = call('recent_activity', O, { limit: 2 })
 const page2 = call('recent_activity', O, { limit: 2, before: page1.at(-1).at, before_k: page1.at(-1).k })
@@ -237,7 +262,7 @@ const before = snapshot()
 const ARGS = {
   id: LEAD, lead_id: LEAD, list_id: L, project_id: P, to_project_id: P, source_id: 'src', code: CODE, user_id: O,
   name: 'Alice', country: 'AU', kind: 'Reddit', platform: 'Email', direction: 'out', body: 'x', occurred_at: now,
-  status: 'contacted', reason: 'x', note: 'x', action: 'call', at: now, fields: '{"a":1}', tags: '["t"]',
+  status: 'contacted', reason: 'x', note: 'x', client_mutation_id: 'cross-user-retry', action: 'call', at: now, fields: '{"a":1}', tags: '["t"]',
   messages: '[{"direction":"in","body":"x","occurred_at":1}]', lead_ids: JSON.stringify([LEAD]),
   q: 'Alice', limit: 50, buckets: JSON.stringify([[now - 30 * day, now + day]]), display_name: 'Eve',
 }

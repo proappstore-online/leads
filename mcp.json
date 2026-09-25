@@ -832,8 +832,8 @@
       "name": "add_note",
       "operation": "execute",
       "requires_auth": true,
-      "description": "Add a timestamped note to the lead history - what happened, what was agreed, what you learned. Unlike the notes field it keeps every note with its time and author. Also works on a lead assigned to you in a project you joined. \"changes\": 0 means the lead is not yours or the note is empty.",
-      "sql": "UPDATE leads SET updated_at = p.now, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', p.now, 'by', p.uid, 'note', p.note))) FROM (SELECT :id AS id, :__user_id AS uid, :__now AS now, trim(:note) AS note) AS p WHERE leads.id = p.id AND p.note <> '' AND (leads.user_id = :__user_id OR (leads.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = leads.id)))",
+      "description": "Add a timestamped note to the lead history - what happened, what was agreed, what you learned. Unlike the notes field it keeps every note with its time and author. client_mutation_id is a non-empty value up to 128 characters that the caller generates once and reuses if it retries; repeating it leaves the original note unchanged. Also works on a lead assigned to you in a project you joined. \"changes\": 0 means the lead is not yours, the note or mutation id is invalid, or that mutation was already recorded.",
+      "sql": "UPDATE leads SET updated_at = p.now, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', p.now, 'by', p.uid, 'note', p.note, 'client_mutation_id', p.client_mutation_id))) FROM (SELECT :id AS id, :__user_id AS uid, :__now AS now, trim(:note) AS note, :client_mutation_id AS client_mutation_id) AS p WHERE leads.id = p.id AND p.note <> '' AND length(p.client_mutation_id) BETWEEN 1 AND 128 AND NOT EXISTS (SELECT 1 FROM json_each(COALESCE(leads.history, '[]')) h WHERE json_extract(h.value, '$.client_mutation_id') = p.client_mutation_id) AND (leads.user_id = :__user_id OR (leads.assigned_to_user_id = :__user_id AND EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = leads.id)))",
       "params": {
         "id": {
           "type": "string",
@@ -842,6 +842,10 @@
         "note": {
           "type": "string",
           "description": "The note"
+        },
+        "client_mutation_id": {
+          "type": "string",
+          "description": "A caller-generated non-empty retry key, at most 128 characters. Reuse it for retries of this exact note."
         }
       }
     },
