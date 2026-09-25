@@ -35,6 +35,10 @@
     {
       "name": "0009_tags_fields_followups_history",
       "sql": "ALTER TABLE leads ADD COLUMN tags TEXT; ALTER TABLE leads ADD COLUMN custom_fields TEXT; ALTER TABLE leads ADD COLUMN next_action_at INTEGER; ALTER TABLE leads ADD COLUMN next_action TEXT; ALTER TABLE leads ADD COLUMN history TEXT; CREATE INDEX IF NOT EXISTS idx_leads_next_action ON leads (user_id, next_action_at)"
+    },
+    {
+      "name": "0010_join_table_replacements",
+      "sql": "CREATE TABLE IF NOT EXISTS lead_list_memberships (id TEXT PRIMARY KEY, lead_id TEXT NOT NULL, list_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL); CREATE UNIQUE INDEX IF NOT EXISTS idx_lead_list_memberships_pair ON lead_list_memberships (lead_id, list_id); CREATE INDEX IF NOT EXISTS idx_lead_list_memberships_list ON lead_list_memberships (list_id); CREATE TABLE IF NOT EXISTS project_memberships (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, user_id TEXT NOT NULL, display_name TEXT, joined_at INTEGER NOT NULL, created_at INTEGER NOT NULL); CREATE UNIQUE INDEX IF NOT EXISTS idx_project_memberships_pair ON project_memberships (project_id, user_id); CREATE INDEX IF NOT EXISTS idx_project_memberships_user ON project_memberships (user_id); CREATE TABLE IF NOT EXISTS join_table_backfills (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at INTEGER NOT NULL); CREATE UNIQUE INDEX IF NOT EXISTS idx_join_table_backfills_user ON join_table_backfills (user_id)"
     }
   ]
 }

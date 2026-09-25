@@ -21,7 +21,9 @@ Platform conventions: https://proappstore.online/skills.md
   `source` is where the lead was found (a Facebook group, a community, an event) — not
   their employer, which is `company`.
 - `lists` — a named category of leads with a `purpose`.
-- `lead_lists` — many-to-many membership. Deleting a list never deletes its leads.
+- `lead_list_memberships` — many-to-many membership. Deleting a list never deletes its leads.
+  It replaced the deployed composite-key `lead_lists` table in 0010; the legacy table stays
+  untouched solely as a backfill source.
 - `messages` — the recorded conversation with a lead, one row per message: `platform`,
   `direction` (`out` = sent by the user, `in` = sent by the lead), full `body`, and
   `occurred_at` — the exact time it was sent, epoch ms (not `created_at`, which is when
@@ -46,7 +48,7 @@ Platform conventions: https://proappstore.online/skills.md
 - `projects` group lists. Every list is in a project, and every action that takes a `list_id` also
   requires that list's `project_id` - a mismatch changes/returns nothing. Lists from before
   projects have `project_id` null (migrations cannot UPDATE) and are addressed with `'none'` until
-  moved into one; new lists always get a project. `project_members` join through
+  moved into one; new lists always get a project. `project_memberships` join through
   single-use invite codes (`project_invites`, link `?join=<code>`, 7 days). `leads.assigned_to_user_id`
   is the owner or a member of a project that one of the lead's lists belongs to (`assign_lead`
   checks it; actions that remove that path unassign).
@@ -121,7 +123,10 @@ worker calls `.bind()` even with none, which D1 answers with a 500.
 `add_messages` takes a JSON thread, is all-or-nothing, and skips messages already stored.
 
 Schema changes: add a new entry to `migrations.json` (additive only, never edit an
-applied one), and keep `mcp.json` columns in step with it.
+applied one), and keep `mcp.json` columns in step with it. A deployed table that needs a
+new identity shape is replaced by a new additive table; retain the old table as a read-only
+backfill source and add an idempotent, user-scoped action like `backfill_legacy_join_tables`.
+Record that transfer once per user so a legacy source row cannot resurrect a later deletion.
 
 The same actions are exposed to MCP clients as `leads/<action>`, so an agent can add or
 look up leads and record or read their conversations directly.

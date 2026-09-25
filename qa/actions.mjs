@@ -13,9 +13,10 @@ import { randomUUID } from 'node:crypto'
 
 const read = (p) => JSON.parse(readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8'))
 const TOOLS = Object.fromEntries(read('../mcp.json').tools.map((t) => [t.name, t]))
+const MIGRATIONS = read('../migrations.json').migrations
 
 const db = new DatabaseSync(':memory:')
-for (const m of read('../migrations.json').migrations) db.exec(m.sql)
+for (const m of MIGRATIONS) db.exec(m.sql)
 
 /** Defaults, optionals and types, as the backend resolves them before binding. */
 function resolve(tool, params) {
@@ -98,6 +99,46 @@ call('create_source', O, { id: 'src', name: 'Jobs group', kind: 'Facebook group'
 call('create_lead', O, { id: LEAD, name: 'Alice', country: 'AU', source_id: 'src' })
 call('add_lead_to_list', O, { lead_id: LEAD, list_id: L, project_id: P })
 call('create_lead', O, { id: OTHER, name: 'Bob', country: 'AU' })
+
+// --- PAS-DATA-001/002: forward-only join-table replacement and compatibility backfill ---------
+const replacement = MIGRATIONS.at(-1)
+ok(replacement.name === '0010_join_table_replacements', 'the join-table replacement is an appended migration')
+ok(!/\b(?:INSERT|UPDATE|DELETE|DROP|RENAME)\b/i.test(replacement.sql), 'the appended migration is schema-additive only')
+ok(MIGRATIONS.find((m) => m.name === '0006_sources')?.sql.includes('INSERT INTO sources'), 'the deployed 0006 data migration remains unchanged')
+const tableInfo = (table) => db.prepare(`PRAGMA table_info(${table})`).all()
+for (const table of ['lead_list_memberships', 'project_memberships', 'join_table_backfills']) {
+  const columns = tableInfo(table)
+  ok(columns.some((c) => c.name === 'id' && c.type === 'TEXT' && c.pk === 1), `${table} has a stable TEXT primary key`)
+  ok(columns.some((c) => c.name === 'created_at' && c.notnull === 1), `${table} has a required created_at`)
+}
+
+const LEGACY_LEAD = randomUUID()
+const LEGACY_MEMBER = 'legacy-member'
+const legacyAt = now - 3 * day
+call('create_lead', O, { id: LEGACY_LEAD, name: 'Legacy Alice', country: 'AU' })
+db.prepare('INSERT INTO lead_lists (lead_id, list_id, user_id, created_at) VALUES (?, ?, ?, ?)').run(LEGACY_LEAD, L, O, legacyAt)
+db.prepare('INSERT INTO project_members (project_id, user_id, display_name, joined_at) VALUES (?, ?, ?, ?)').run(P, LEGACY_MEMBER, 'Legacy member', legacyAt)
+const legacyBefore = {
+  lists: db.prepare('SELECT * FROM lead_lists WHERE lead_id = ?').all(LEGACY_LEAD),
+  members: db.prepare('SELECT * FROM project_members WHERE project_id = ? AND user_id = ?').all(P, LEGACY_MEMBER),
+}
+const backfilled = call('backfill_legacy_join_tables', O)
+ok(backfilled[0] === 1 && backfilled[1] === 1 && backfilled[2] === 1, `the backfill copies legacy joins once (${backfilled.join(',')})`)
+const copiedList = db.prepare('SELECT * FROM lead_list_memberships WHERE lead_id = ? AND list_id = ?').get(LEGACY_LEAD, L)
+const copiedMember = db.prepare('SELECT * FROM project_memberships WHERE project_id = ? AND user_id = ?').get(P, LEGACY_MEMBER)
+ok(typeof copiedList?.id === 'string' && copiedList.id.length > 0 && copiedList.created_at === legacyAt, 'the list membership keeps its timestamp and gets a stable ID')
+ok(typeof copiedMember?.id === 'string' && copiedMember.id.length > 0 && copiedMember.joined_at === legacyAt && copiedMember.created_at === legacyAt, 'the project membership keeps its timestamp and gets a stable ID')
+ok(JSON.stringify(legacyBefore.lists) === JSON.stringify(db.prepare('SELECT * FROM lead_lists WHERE lead_id = ?').all(LEGACY_LEAD)) && JSON.stringify(legacyBefore.members) === JSON.stringify(db.prepare('SELECT * FROM project_members WHERE project_id = ? AND user_id = ?').all(P, LEGACY_MEMBER)), 'the backfill never mutates legacy rows')
+ok(call('list_leads', O, { list_id: L, project_id: P, limit: 50 }).some((lead) => lead.id === LEGACY_LEAD), 'runtime list reads use the backfilled stable-ID membership')
+ok(call('list_project_members', O, { project_id: P }).some((member) => member.user_id === LEGACY_MEMBER), 'runtime member reads use the backfilled stable-ID membership')
+ok(call('remove_lead_from_list', O, { lead_id: LEGACY_LEAD, list_id: L, project_id: P }) === 1, 'a backfilled membership can be removed normally')
+const againBackfill = call('backfill_legacy_join_tables', O)
+ok(againBackfill.every((changes) => changes === 0), `the one-time backfill cannot resurrect a removed membership (${againBackfill.join(',')})`)
+ok(!call('list_leads', O, { list_id: L, project_id: P, limit: 50 }).some((lead) => lead.id === LEGACY_LEAD), 'legacy source rows do not override later membership removal')
+const unrelatedBackfill = call('backfill_legacy_join_tables', 'unrelated-backfill')
+ok(JSON.stringify(unrelatedBackfill) === JSON.stringify([0, 0, 1]) && db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0 && db.prepare('SELECT count(*) AS n FROM project_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0, 'a different user cannot backfill the owner’s legacy joins')
+const legacyRuntimeReferences = Object.values(TOOLS).filter((tool) => !['backfill_legacy_join_tables', 'delete_my_data'].includes(tool.name)).filter((tool) => /\b(?:lead_lists|project_members)\b/.test((tool.sql ?? '') + (tool.statements ?? []).join(' ')))
+ok(legacyRuntimeReferences.length === 0, 'only the explicit backfill and account purge reference legacy join tables')
 
 // Four things happen to Alice, days apart, and the lead row is edited last of all.
 call('set_lead_status', O, { id: LEAD, status: 'contacted' })
@@ -187,8 +228,8 @@ const MSG = randomUUID()
 call('add_message', O, { id: MSG, lead_id: LEAD, platform: 'Email', direction: 'out', body: 'Following up', occurred_at: now })
 call('create_project_invite', O, { project_id: P })
 const CODE = db.prepare('SELECT code FROM project_invites WHERE project_id = ?').get(P).code
-const OWNER_IDS = [P, L, LEAD, OTHER, 'src', MSG, CODE]
-const TABLES = ['leads', 'lists', 'lead_lists', 'messages', 'project_invites', 'project_members', 'projects', 'sources']
+const OWNER_IDS = [P, L, LEAD, OTHER, LEGACY_LEAD, LEGACY_MEMBER, 'src', MSG, CODE]
+const TABLES = ['leads', 'lists', 'lead_lists', 'lead_list_memberships', 'messages', 'project_invites', 'project_members', 'project_memberships', 'join_table_backfills', 'projects', 'sources']
 const snapshot = () => Object.fromEntries(TABLES.map((t) => [t, new Set(db.prepare(`SELECT * FROM ${t}`).all().map((r) => JSON.stringify(r)))]))
 const before = snapshot()
 
@@ -203,6 +244,7 @@ const ARGS = {
 /** Actions where a stranger's call is NOT a cross-user attempt, each with why. */
 const SKIP = {
   how_to_use: 'static guidance, the same for every caller',
+  backfill_legacy_join_tables: 'creates only a caller-owned completion marker; its legacy-copy and isolation behaviour is tested above',
   get_project_invite: 'the invite code IS the grant — reading it by code is how joining works',
   join_project: 'the grant path; its one-shot behaviour is tested below',
   check_lead_links: 'validates the caller\'s own input and touches no rows',
@@ -280,11 +322,12 @@ ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code 
   call('create_project_invite', G, { project_id: GP })
   // Cross-user links: the goner is a member of the owner's project, is assigned one of the owner's
   // leads, and the owner has a list attached to the goner's project.
-  db.prepare('INSERT INTO project_members (project_id, user_id, display_name, joined_at) VALUES (?, ?, ?, ?)').run(P, G, 'Goner', now)
+  db.prepare('INSERT INTO project_memberships (id, project_id, user_id, display_name, joined_at, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), P, G, 'Goner', now, now)
   db.prepare('UPDATE leads SET assigned_to_user_id = ? WHERE id = ?').run(G, OTHER)
   const OL = randomUUID()
   // Inserted directly: create_list rightly refuses a project the caller is not a member of.
   db.prepare('INSERT INTO lists (id, user_id, name, purpose, created_at, project_id) VALUES (?, ?, ?, ?, ?, ?)').run(OL, O, 'Owner list in goner project', 'x', now, GP)
+  call('backfill_legacy_join_tables', G)
   const ownerBefore = snapshot()
   const rowsFor = (user) => Object.fromEntries(TABLES.map((t) => {
     const col = t === 'project_invites' ? 'created_by' : 'user_id'
@@ -299,7 +342,7 @@ ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code 
   ok(gone.some((c) => c > 0), `delete_my_data with the exact phrase deletes (${gone.join(',')})`)
   const left = rowsFor(G)
   ok(Object.values(left).every((n) => n === 0), `no row for the deleted user remains in any table (${JSON.stringify(left)})`)
-  ok(db.prepare('SELECT count(*) AS n FROM lead_lists WHERE lead_id = ? OR list_id = ?').get(GL, GLIST).n === 0, 'no memberships reference the deleted leads or lists')
+  ok(db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE lead_id = ? OR list_id = ?').get(GL, GLIST).n === 0, 'no stable-ID memberships reference the deleted leads or lists')
   ok(db.prepare('SELECT count(*) AS n FROM messages WHERE lead_id = ?').get(GL).n === 0, 'no messages reference the deleted leads')
   ok(db.prepare('SELECT count(*) AS n FROM project_invites WHERE project_id = ?').get(GP).n === 0, 'no invites reference the deleted project')
   ok(db.prepare('SELECT assigned_to_user_id FROM leads WHERE id = ?').get(OTHER).assigned_to_user_id === null, "the owner's lead assigned to the deleted user is unassigned, not deleted")

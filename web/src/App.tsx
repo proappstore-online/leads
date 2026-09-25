@@ -50,6 +50,9 @@ export default function App() {
 
   const loadProjects = useCallback(async () => {
     try {
+      // 0010 leaves the deployed composite-key tables intact. Copy this caller's
+      // rows before any action reads the stable-ID replacements.
+      await x('backfill_legacy_join_tables')
       setProjects(await q<Project>('list_projects'))
       setLoaded(true)
     } catch (e) {
