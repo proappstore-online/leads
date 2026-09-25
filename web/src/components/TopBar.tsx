@@ -29,7 +29,7 @@ export function TopBar({ projects, current, platform, onSwitch, onManage, onNew 
           aria-label="Current project"
           value={current}
           onChange={(e) => (e.target.value === NEW_PROJECT ? onNew() : onSwitch(e.target.value))}
-          className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-2 py-1.5 text-sm font-semibold text-[var(--ink)] outline-none sm:flex-none sm:max-w-64"
+          className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-2 py-1.5 text-sm font-semibold text-[var(--ink)] outline-none sm:flex-none sm:max-w-64"
         >
           {own.length > 0 && (
             <optgroup label="Your projects">

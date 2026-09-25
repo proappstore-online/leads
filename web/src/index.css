@@ -13,11 +13,7 @@
   --panel: rgba(255, 255, 255, 0.72);
   --panel-strong: rgba(255, 255, 255, 0.88);
   --panel-quiet: rgba(255, 255, 255, 0.6);
-  --dock: #f7f7f7;
-  --glass-soft: rgba(255, 255, 255, 0.5);
-  --glass: rgba(255, 255, 255, 0.7);
-  --glass-hover: rgba(255, 255, 255, 0.85);
-  --glass-strong: rgba(255, 255, 255, 0.88);
+  --panel-hover: rgba(255, 255, 255, 0.85);
   --accent: #d86f4d;
   --accent-soft: #ffd4bf;
   --accent-deep: #9f4427;
@@ -46,18 +42,6 @@
   --shadow-soft: 0 28px 70px rgba(24, 44, 104, 0.12);
   --shadow-card: 0 12px 28px rgba(26, 41, 81, 0.08);
 
-  /* Standard SDK tokens (aliases to template vars) */
-  --bg: var(--paper);
-  --surface: var(--paper);
-  --surface-2: var(--paper-deep);
-  --ink-strong: var(--ink);
-  --border: var(--line);
-  --border-strong: var(--line-strong);
-  --accent-hover: var(--accent-deep);
-  --radius: 0.75rem;
-  --radius-sm: 0.5rem;
-  --shadow: var(--shadow-card);
-
   /* Chart series - validated pair (CVD + contrast) for light surfaces. */
   --series-1: #2a78d6;
   --series-2: #eb6834;
@@ -74,11 +58,7 @@
   --panel: rgba(18, 18, 18, 0.8);
   --panel-strong: rgba(18, 18, 18, 0.92);
   --panel-quiet: rgba(22, 22, 22, 0.8);
-  --dock: #0a0a0a;
-  --glass-soft: rgba(30, 30, 30, 0.6);
-  --glass: rgba(26, 26, 26, 0.8);
-  --glass-hover: rgba(38, 38, 38, 0.9);
-  --glass-strong: rgba(16, 16, 16, 0.9);
+  --panel-hover: rgba(38, 38, 38, 0.9);
   --accent: #ff9b76;
   --accent-soft: #3b2119;
   --accent-deep: #ffd9cb;

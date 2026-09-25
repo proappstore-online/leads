@@ -105,7 +105,10 @@ export default function App() {
     <ProShell
       app={app}
       appName="Leads"
-      menuItems={[{ label: 'Delete my data…', onClick: deleteMyData }]}
+      menuItems={[
+        { label: 'Recover session…', onClick: () => { location.assign('/.pas/auth/recover') } },
+        { label: 'Delete my data…', onClick: deleteMyData },
+      ]}
       renderTopbar={(ctx) => (
         <TopBar
           projects={projects}
@@ -359,6 +362,11 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
     </button>
   )
 
+  useEffect(() => {
+    const page = view === 'stats' ? 'Stats' : view === 'sources' ? 'Sources' : attentionOnly ? 'Needs attention' : followUpsOnly ? 'Follow-ups due' : assignedOnly ? 'Assigned to me' : current?.name ?? 'Leads'
+    document.title = `${page} — ProAppStore`
+  }, [view, attentionOnly, followUpsOnly, assignedOnly, current?.name])
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
       <nav aria-label="Lead lists" className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
@@ -395,14 +403,14 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       {view === 'stats' ? (
         <StatsPage lists={lists} sources={sources} people={people} projectId={scope} version={version} onOpenLead={openLeadById} />
       ) : view === 'sources' ? (
-      <main className="min-w-0 flex-1">
+      <main id="main-content" className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="display-font text-2xl font-bold text-[var(--ink)]">Sources</h1>
             <p className="mt-0.5 text-sm text-[var(--muted)]">Where leads are found and how each place performs. Click a source for its details and leads.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <select aria-label="Sort sources" value={sourceSort} onChange={(e) => setSourceSort(e.target.value as SourceSort)} className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-sm text-[var(--ink)] outline-none">
+            <select aria-label="Sort sources" value={sourceSort} onChange={(e) => setSourceSort(e.target.value as SourceSort)} className="rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none">
               <option value="leads">Most leads</option>
               <option value="reply_rate">Best reply rate</option>
               <option value="won">Most won</option>
@@ -424,7 +432,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
         </div>
       </main>
       ) : (
-      <main className="min-w-0 flex-1">
+      <main id="main-content" className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="display-font truncate text-2xl font-bold text-[var(--ink)]">{attentionOnly ? 'Needs attention' : followUpsOnly ? 'Follow-ups due' : assignedOnly ? 'Assigned to me' : current?.name ?? 'All leads'}</h1>
@@ -452,13 +460,13 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, company, title, email, phone, source"
-            className="w-full min-w-0 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
+            className="w-full min-w-0 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
           />
           <select
             aria-label="Filter by status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
           >
             <option value="">Any status</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -468,7 +476,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             aria-label="Filter by assignee"
             value={assignedTo}
             onChange={(e) => setAssignedTo(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
           >
             <option value="">Anyone</option>
             <option value="none">Not assigned</option>
@@ -479,7 +487,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             aria-label="Filter by fit"
             value={fit}
             onChange={(e) => setFit(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
           >
             <option value="">Any fit</option>
             {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
@@ -488,7 +496,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             aria-label="Filter by country"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
           >
             <option value="">Any country</option>
             <option value="none">Country not confirmed</option>
@@ -498,14 +506,14 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             aria-label="Filter by source"
             value={sourceId}
             onChange={(e) => setSourceId(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-48 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
+            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-48 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
           >
             <option value="">Any source</option>
             <option value="none">No source</option>
             {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           {!followUpsOnly && (
-            <select aria-label="Filter by follow-up" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
+            <select aria-label="Filter by follow-up" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
               <option value="">Any follow-up</option>
               <option value="due">Follow-up due</option>
               <option value="scheduled">Follow-up scheduled</option>
@@ -513,7 +521,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             </select>
           )}
           {tags.length > 0 && (
-            <select aria-label="Filter by tag" value={tag} onChange={(e) => setTag(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
+            <select aria-label="Filter by tag" value={tag} onChange={(e) => setTag(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
               <option value="">Any tag</option>
               {tags.map((t) => <option key={t.tag} value={t.tag}>#{t.tag} ({t.leads})</option>)}
             </select>

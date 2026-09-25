@@ -147,7 +147,7 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
   const current = data?.pairs === pairs ? data : null
   const totals = current?.totals ?? null
   const col = (key: keyof Bucket) => current?.series.map((b) => b[key]) ?? []
-  const selectClass = 'rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-sm text-[var(--ink)] outline-none'
+  const selectClass = 'rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none'
   const tiles: [string, number | undefined][] = [
     ['Leads added', totals?.leads_added],
     ['Messages sent', totals?.messages_sent],

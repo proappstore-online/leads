@@ -60,7 +60,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
           </thead>
           <tbody>
             {sources.map((s) => (
-              <tr key={s.id} onClick={() => onOpen(s.id)} className="cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--glass-hover)]">
+              <tr key={s.id} onClick={() => onOpen(s.id)} className="cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--panel-hover)]">
                 <td className="px-4 py-3">
                   <div className="font-semibold text-[var(--ink)]">
                     {s.url ? <span onClick={(e) => e.stopPropagation()}><ExternalLink href={s.url}>{s.name}</ExternalLink></span> : s.name}
@@ -83,7 +83,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
                 </td>
               </tr>
             ))}
-            <tr onClick={() => onOpen('none')} className="cursor-pointer hover:bg-[var(--glass-hover)]">
+            <tr onClick={() => onOpen('none')} className="cursor-pointer hover:bg-[var(--panel-hover)]">
               <td className="px-4 py-3 italic text-[var(--muted)]">No source</td>
               <td className={`${num} font-semibold text-[var(--ink)]`}>{noSource}</td>
               <td colSpan={8} />

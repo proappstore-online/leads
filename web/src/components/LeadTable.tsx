@@ -95,7 +95,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
       {/* Phones: one card per lead, contact details as tappable links. */}
       <div className="sm:hidden">
         <div className="mb-2 flex items-center justify-end gap-2 text-sm">
-          <select aria-label="Sort leads" value={sort.key} onChange={(e) => onSort(e.target.value as SortKey)} className="rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-[var(--ink)] outline-none">
+          <select aria-label="Sort leads" value={sort.key} onChange={(e) => onSort(e.target.value as SortKey)} className="rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[var(--ink)] outline-none">
             {SORTS.map(([key, label]) => <option key={key} value={key}>Sort: {label}</option>)}
           </select>
           <button type="button" onClick={() => onSort(sort.key)} aria-label={sort.dir === 'asc' ? 'Ascending - switch to descending' : 'Descending - switch to ascending'} className="rounded-xl border border-[var(--line)] px-3 py-2 font-semibold text-[var(--ink)]">
@@ -145,7 +145,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
           </thead>
           <tbody>
             {leads.map((lead) => (
-              <tr key={lead.id} onClick={() => onOpen(lead)} className={`cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--glass-hover)] ${lead.needs_attention ? attentionRow : ''}`}>
+              <tr key={lead.id} onClick={() => onOpen(lead)} className={`cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--panel-hover)] ${lead.needs_attention ? attentionRow : ''}`}>
                 <td className="px-4 py-3">{summary(lead)}</td>
                 <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
                   {lead.email && <a href={`mailto:${lead.email}`} className={`block ${linkClass}`}>{lead.email}</a>}

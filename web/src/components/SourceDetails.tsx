@@ -59,7 +59,7 @@ export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, o
             {source.url && <> · <ExternalLink href={source.url} /></>}
             <> · added {date(source.created_at)}</>
           </div>
-          {source.notes && <p className={`whitespace-pre-wrap rounded-xl border border-[var(--line)] bg-[var(--glass)] px-4 py-3 text-sm text-[var(--ink)] ${wrapAnywhere}`}>{source.notes}</p>}
+          {source.notes && <p className={`whitespace-pre-wrap rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] ${wrapAnywhere}`}>{source.notes}</p>}
 
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {tiles.map(([label, value]) => (
@@ -93,7 +93,7 @@ export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, o
               <ul className="mt-2 divide-y divide-[var(--line)] rounded-xl border border-[var(--line)]">
                 {leads.map((l) => (
                   <li key={l.id}>
-                    <button type="button" onClick={() => onOpenLead(l)} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--glass-hover)]">
+                    <button type="button" onClick={() => onOpenLead(l)} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-[var(--panel-hover)]">
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-[var(--ink)]">
                           {l.name}

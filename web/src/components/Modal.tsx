@@ -42,26 +42,55 @@ window.addEventListener('keydown', (e) => {
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const onCloseRef = useRef(onClose)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const openerRef = useRef<HTMLElement | null>(null)
   useEffect(() => { onCloseRef.current = onClose })
 
   useEffect(() => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const close = () => onCloseRef.current()
     open.push(close)
     syncHistory()
     document.body.style.overflow = 'hidden'
+    const focusDialog = () => {
+      const dialog = dialogRef.current
+      if (!dialog || dialog.contains(document.activeElement)) return
+      dialog.querySelector<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')?.focus()
+      if (!dialog.contains(document.activeElement)) dialog.focus()
+    }
+    const frame = requestAnimationFrame(focusDialog)
     return () => {
+      cancelAnimationFrame(frame)
       open.splice(open.indexOf(close), 1)
       syncHistory()
       if (open.length === 0) document.body.style.overflow = ''
+      // Only restore focus when this dialog owned it. A newly opened modal must
+      // retain focus rather than being pulled back to an element behind it.
+      if (document.activeElement === document.body || dialogRef.current?.contains(document.activeElement)) openerRef.current?.focus()
     }
   }, [])
+
+  function trapTab(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== 'Tab') return
+    const dialog = dialogRef.current
+    if (!dialog) return
+    const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    if (focusable.length === 0) { e.preventDefault(); dialog.focus(); return }
+    const first = focusable[0]
+    const last = focusable.at(-1)!
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
+        onKeyDown={trapTab}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-t-2xl border border-[var(--line)] bg-[var(--paper)] p-5 shadow-[var(--shadow-soft)] sm:rounded-2xl sm:p-6"
       >

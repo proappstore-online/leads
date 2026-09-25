@@ -62,7 +62,7 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
             return (
               <li key={h.seq} className="text-sm">
                 <div className="text-xs text-[var(--muted)]">{when(h.at)} · {people.get(h.by_user_id) ?? 'Owner'}</div>
-                {h.note && <p className="mt-1 whitespace-pre-wrap rounded-xl border border-[var(--line)] bg-[var(--glass)] px-3 py-2 text-[var(--ink)] [overflow-wrap:anywhere]">{h.note}</p>}
+                {h.note && <p className="mt-1 whitespace-pre-wrap rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[var(--ink)] [overflow-wrap:anywhere]">{h.note}</p>}
                 {h.via === 'create_lead' && <p className="mt-0.5 text-[var(--ink)]">Lead added</p>}
                 {changes.map(([field, [from, to]]) => field === 'notes' ? (
                   <details key={field} className="mt-0.5 text-[var(--ink)]">

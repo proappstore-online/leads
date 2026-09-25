@@ -29,12 +29,12 @@ jobs:
         with:
           node-version: 22
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Build
         env:
           VITE_COMMIT_SHA: ${{ github.sha }}
-        run: pnpm build || (cd web 2>/dev/null || true; npx vite build)
+        run: pnpm build
 
       - name: Locate build output
         id: dist

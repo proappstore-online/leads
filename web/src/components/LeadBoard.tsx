@@ -70,7 +70,7 @@ export function LeadBoard({ leads, people, onOpen, onMove }: {
                     value={lead.status}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => onMove(lead, e.target.value)}
-                    className="mt-2 w-full rounded-lg border border-[var(--line)] bg-[var(--glass)] px-2 py-1.5 text-xs capitalize text-[var(--ink)] outline-none"
+                    className="mt-2 w-full rounded-lg border border-[var(--line)] bg-[var(--panel)] px-2 py-1.5 text-xs capitalize text-[var(--ink)] outline-none"
                   >
                     {STATUSES.map((s) => <option key={s} value={s}>{s === lead.status ? `In ${s}` : `Move to ${s}`}</option>)}
                   </select>

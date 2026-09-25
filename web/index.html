@@ -18,7 +18,7 @@
       does not run. React escapes everything and the app has no HTML sinks
       (qa/csp.mjs checks), so this is the second line of defence.
     -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'sha256-Lo3O4odfAEvXK6y89J+BN1c+RjQtJ6cAnO4NR87ghHg=' https://api.proappstore.online https://static.cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'sha256-rA6zK11dd/6hXmD2iAf0oU5Vz1xGmNxcqs0LJ1ZZPbU=' https://api.proappstore.online https://static.cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -41,7 +41,7 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <script>
       (function() {
-        var pref = localStorage.getItem('fas:theme') || 'system';
+        var pref = localStorage.getItem('stores-theme') || 'system';
         var dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
         if (dark) document.documentElement.dataset.theme = 'dark';
         var text = localStorage.getItem('stores-text-size');
