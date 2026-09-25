@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
+import { importSql, SECTIONS } from '../recovery/import.mjs'
 
 const read = (p) => JSON.parse(readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8'))
 const TOOLS = Object.fromEntries(read('../mcp.json').tools.map((t) => [t.name, t]))
@@ -137,8 +138,8 @@ ok(againBackfill.every((changes) => changes === 0), `the one-time backfill canno
 ok(!call('list_leads', O, { list_id: L, project_id: P, limit: 50 }).some((lead) => lead.id === LEGACY_LEAD), 'legacy source rows do not override later membership removal')
 const unrelatedBackfill = call('backfill_legacy_join_tables', 'unrelated-backfill')
 ok(JSON.stringify(unrelatedBackfill) === JSON.stringify([0, 0, 1]) && db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0 && db.prepare('SELECT count(*) AS n FROM project_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0, 'a different user cannot backfill the owner’s legacy joins')
-const legacyRuntimeReferences = Object.values(TOOLS).filter((tool) => !['backfill_legacy_join_tables', 'delete_my_data'].includes(tool.name)).filter((tool) => /\b(?:lead_lists|project_members)\b/.test((tool.sql ?? '') + (tool.statements ?? []).join(' ')))
-ok(legacyRuntimeReferences.length === 0, 'only the explicit backfill and account purge reference legacy join tables')
+const legacyRuntimeReferences = Object.values(TOOLS).filter((tool) => !['backfill_legacy_join_tables', 'delete_my_data', 'export_my_data'].includes(tool.name)).filter((tool) => /\b(?:lead_lists|project_members)\b/.test((tool.sql ?? '') + (tool.statements ?? []).join(' ')))
+ok(legacyRuntimeReferences.length === 0, 'only the explicit backfill, account purge and recovery export reference legacy join tables')
 
 // Four things happen to Alice, days apart, and the lead row is edited last of all.
 call('set_lead_status', O, { id: LEAD, status: 'contacted' })
@@ -224,6 +225,39 @@ const contenders = [
 ok(JSON.stringify(contenders) === JSON.stringify([1, 0]) && JSON.parse(db.prepare('SELECT history FROM leads WHERE id = ?').get(RETRY_LEAD).history).filter((entry) => entry.client_mutation_id === CONTENDED_KEY).length === 1, 'contending same-key writes serialize to one note through the atomic update guard')
 const tooLongKey = 'x'.repeat(129)
 ok(call('add_note', O, { id: RETRY_LEAD, note: 'Refused', client_mutation_id: tooLongKey }) === 0, 'a mutation key over 128 characters is refused')
+
+// --- PAS-OPS-014: every scoped export can be rebuilt into a clean recovery database ------------
+const EXPORT_OTHER = 'export-other'
+call('create_lead', EXPORT_OTHER, { id: randomUUID(), name: 'Must not export', country: 'NZ' })
+const recoveryRows = []
+for (const section of Object.keys(SECTIONS)) {
+  let offset = 0
+  let total = null
+  do {
+    const page = call('export_my_data', O, { section, limit: 2, offset })
+    total ??= page[0]?.total
+    const records = page.filter((record) => record.data !== null)
+    recoveryRows.push(...records)
+    offset += records.length
+  } while (offset < total)
+}
+ok(recoveryRows.every((record) => record.format === 'leads-export/v1' && typeof record.data === 'string'), 'the scoped export is JSONL-ready and contains only record bodies')
+ok(!JSON.stringify(recoveryRows).includes('Must not export'), 'the scoped export never includes another owner\'s rows')
+ok(call('export_my_data', O, { section: 'leads', limit: 201 }).length === 0 && call('export_my_data', O, { section: 'not-a-section' }).length === 0, 'the registered export rejects an oversized page and unknown section')
+const restored = new DatabaseSync(':memory:')
+for (const m of MIGRATIONS) restored.exec(m.sql)
+restored.exec(importSql(recoveryRows.map((record) => JSON.stringify(record)).join('\n')))
+const scopeWhere = {
+  leads: 'user_id = ?', lists: 'user_id = ?', memberships: 'user_id = ?', messages: 'user_id = ?', sources: 'user_id = ?', projects: 'user_id = ?', join_table_backfills: 'user_id = ?', legacy_lead_lists: 'user_id = ?',
+  project_memberships: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', project_invites: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', legacy_project_members: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
+}
+const ordered = (database, table, where) => database.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(O).map((row) => JSON.stringify(row)).sort()
+const recoveryMismatches = Object.entries(SECTIONS).filter(([section, { table }]) =>
+  JSON.stringify(ordered(db, table, scopeWhere[section])) !== JSON.stringify(ordered(restored, table, scopeWhere[section]))).map(([section]) => section)
+ok(recoveryMismatches.length === 0, `a complete paged export imports losslessly into an empty database (${recoveryMismatches.join(', ') || 'all sections'})`)
+let unsafeImportRefused = false
+try { importSql('{"format":"leads-export/v1","section":"leads","data":{"id":"only-one-field"}}') } catch { unsafeImportRefused = true }
+ok(unsafeImportRefused, 'the recovery importer refuses incomplete or altered records')
 
 // Paging walks the same order.
 const page1 = call('recent_activity', O, { limit: 2 })

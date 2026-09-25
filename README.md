@@ -34,6 +34,59 @@ and the platform's telemetry aggregates. The SDK's `deleteAccount()` only clears
 per-app KV keys and signs you out; it is not offered here as account deletion. For
 platform account deletion, contact support@proappstore.online.
 
+## Recovery export and import
+
+`export_my_data` is the owner-scoped recovery export. It produces the
+`leads-export/v1` JSONL format: each result row has `format`, `section`, `total`,
+and a JSON `data` record. It is intentionally paged (1–200 records per call), so
+it is safe to use for a single owner without returning another owner's data or an
+unbounded database dump. The export includes caller-owned leads, lists, messages,
+sources, projects and relationship state, plus members and invites of projects the
+caller owns. It does not include a membership in somebody else's project or any
+other owner’s records. Treat the file as sensitive: it includes lead content,
+project member names and invite codes.
+
+To make an export, call the action as the owner for every section below, starting
+at `offset: 0` with (for example) `limit: 200`. Append every returned result row
+as one line of a protected `export.jsonl` file. The action’s `total` is the count
+for that section; repeat with `offset` increased by the number of non-null `data`
+rows until it reaches `total`. An empty section returns one row with `data: null`.
+
+```text
+leads, lists, memberships, messages, sources, projects,
+project_memberships, project_invites, join_table_backfills,
+legacy_lead_lists, legacy_project_members
+```
+
+To rehearse or recover, start with a *new, empty* D1 database that has the current
+`migrations.json` schema. Never use this importer to merge into a live database:
+it deliberately emits plain `INSERT`s and stops on a conflict. Build a transaction
+from the saved file, inspect it, then have a platform operator apply it to the
+empty recovery database:
+
+```sh
+node recovery/import.mjs < export.jsonl > recovery.sql
+npx wrangler d1 execute RECOVERY_DATABASE --remote --file recovery.sql
+```
+
+Confirm the imported owner can read their expected leads, messages, lists and
+project state with the registered actions before deciding how to resume service.
+`pnpm test` includes this same complete, multi-page export → empty-database import
+rehearsal and checks both lossless recovery and tenant isolation.
+
+### D1 production restore boundary
+
+A Cloudflare D1 Time Travel restore is **database-wide**, destructive, and occurs
+in place — it is not a way to restore one Leads owner. It cancels in-flight queries
+and overwrites newer data. Use it only for a whole-database incident, after a
+platform owner has chosen the restore point and warned affected users; retain the
+reported previous bookmark so the restore can be undone. It requires D1's
+production storage backend. The recovery window is currently up to 30 days on a
+Workers Paid plan and 7 days on Workers Free; it cannot recover older data and D1
+does not yet support cloning/forking a database for this workflow. See Cloudflare’s
+[Time Travel and backups documentation](https://developers.cloudflare.com/d1/reference/time-travel/)
+for the current commands and limits.
+
 ## Telemetry
 
 Leads takes part in the ProAppStore platform's first-party telemetry, all of it on
@@ -56,4 +109,3 @@ scripts (the platform's compliance check *No tracking SDKs* fails a build that a
 one, and the app's Content-Security-Policy only allows scripts from the app itself,
 the platform API and `static.cloudflareinsights.com`). Lead data you enter stays in
 this app's own database and is never part of telemetry.
-
