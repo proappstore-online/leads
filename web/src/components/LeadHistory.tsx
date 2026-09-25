@@ -3,6 +3,7 @@ import { q, x } from '../lib/actions'
 import { fieldLabel, formatValue, when } from '../lib/history'
 import type { HistoryEntry, Lead, Source } from '../types'
 import { inputClass } from './styles'
+import { EmptyState, LoadingState, RetryState } from './AsyncState'
 
 /** A lead's timestamped notes and changes, newest first, with a box to add a note. */
 export function LeadHistory({ lead, people, sources, onChanged }: {
@@ -21,6 +22,7 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
+    setError('')
     try {
       setEntries(await q<HistoryEntry>('get_lead_history', { id: lead.id }))
     } catch (e) {
@@ -57,10 +59,10 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
         <input type="text" aria-label="Add a note" value={note} onChange={(e) => { setNote(e.target.value); setMutationId(null) }} placeholder="Add a note — what happened, what was agreed" className={`${inputClass} mt-0`} />
         <button type="submit" disabled={saving || !note.trim()} className="shrink-0 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-50">Add</button>
       </form>
-      {error && <p className="text-sm text-[var(--error)]">{error}</p>}
-
-      {entries === null ? (
-        <p className="text-sm text-[var(--muted)]">Loading…</p>
+      {error ? <RetryState error={error} onRetry={load} /> : entries === null ? (
+        <LoadingState label="Loading history…" />
+      ) : entries.length === 0 ? (
+        <EmptyState>No history yet. Add a note to record what happens next.</EmptyState>
       ) : (
         <ol className="space-y-3 border-l-2 border-[var(--line)] pl-4">
           {entries.map((h) => {

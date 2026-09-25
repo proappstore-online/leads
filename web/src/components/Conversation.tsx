@@ -3,6 +3,7 @@ import { q, x } from '../lib/actions'
 import { toInputValue } from '../lib/lead'
 import { PLATFORMS, type Lead, type Message } from '../types'
 import { inputClass } from './styles'
+import { EmptyState, LoadingState, RetryState } from './AsyncState'
 
 const PAGE = 500
 
@@ -84,12 +85,8 @@ export function Conversation({ lead, onChanged, readOnlyHistory = false }: { lea
 
   return (
     <div className="mt-4 space-y-4">
-      {error && <p className="text-sm text-[var(--error)]">{error}</p>}
-
-      {messages.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-8 text-center text-sm text-[var(--muted)]">
-          {loading ? 'Loading…' : 'No messages recorded yet.'}
-        </p>
+      {error ? <RetryState error={error} onRetry={() => load(0)} /> : messages.length === 0 ? (
+        loading ? <LoadingState label="Loading messages…" /> : <EmptyState>No messages recorded yet. Use the form below to record the first one.</EmptyState>
       ) : (
         <ol className="select-text space-y-3">
           {messages.map((m) => (

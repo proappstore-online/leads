@@ -3,6 +3,7 @@ import { q, x } from '../lib/actions'
 import type { Project, ProjectMember } from '../types'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
+import { LoadingState, RetryState } from './AsyncState'
 
 interface Invite {
   code: string
@@ -31,23 +32,31 @@ export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, o
   const [copied, setCopied] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [teamError, setTeamError] = useState('')
+  const [teamLoading, setTeamLoading] = useState(Boolean(project?.is_owner))
   const owned = !project || project.is_owner === 1
 
   const loadTeam = useCallback(async () => {
     if (!project?.is_owner) return
-    const [m, i, lists] = await Promise.all([
-      q<ProjectMember>('list_project_members', { project_id: project.id }),
-      q<Invite>('list_project_invites', { project_id: project.id }),
-      q<{ id: string }>('list_lists', { project_id: project.id }),
-    ])
-    setMembers(m)
-    setInvites(i)
-    setListCount(lists.length)
+    setTeamLoading(true)
+    setTeamError('')
+    try {
+      const [m, i, lists] = await Promise.all([
+        q<ProjectMember>('list_project_members', { project_id: project.id }),
+        q<Invite>('list_project_invites', { project_id: project.id }),
+        q<{ id: string }>('list_lists', { project_id: project.id }),
+      ])
+      setMembers(m)
+      setInvites(i)
+      setListCount(lists.length)
+    } catch (e) {
+      setTeamError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setTeamLoading(false)
+    }
   }, [project])
 
-  useEffect(() => {
-    loadTeam().catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [loadTeam])
+  useEffect(() => { loadTeam() }, [loadTeam])
 
   async function run(task: () => Promise<void>) {
     setSaving(true)
@@ -142,7 +151,9 @@ export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, o
         </div>
       </form>
 
-      {project && (
+      {project && teamLoading && <div className="mt-4"><LoadingState label="Loading project members and invites…" /></div>}
+      {project && teamError && <div className="mt-4"><RetryState error={teamError} onRetry={loadTeam} /></div>}
+      {project && !teamLoading && !teamError && (
         <div className="mt-2 space-y-5 border-t border-[var(--line)] pt-4">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Members</h3>

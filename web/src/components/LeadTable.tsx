@@ -9,7 +9,7 @@ const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : 'â
 
 const SORTS: [SortKey, string][] = [['name', 'Name'], ['email', 'Contact'], ['fit', 'Fit'], ['next_action', 'Follow-up'], ['last_contact', 'Last contact'], ['last_reply', 'Last reply'], ['updated', 'Recently changed'], ['status', 'Status']]
 
-/** Leads as a table from the sm breakpoint up, and as stacked cards on phones. */
+/** Leads as a table from the md breakpoint up, and as stacked cards on phones and small tablets. */
 export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen }: {
   leads: Lead[]
   lists: LeadList[]
@@ -93,7 +93,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
   return (
     <>
       {/* Phones: one card per lead, contact details as tappable links. */}
-      <div className="sm:hidden">
+      <div className="md:hidden">
         <div className="mb-2 flex items-center justify-end gap-2 text-sm">
           <select aria-label="Sort leads" value={sort.key} onChange={(e) => onSort(e.target.value as SortKey)} className="rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[var(--ink)] outline-none">
             {SORTS.map(([key, label]) => <option key={key} value={key}>Sort: {label}</option>)}
@@ -126,7 +126,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
         </ul>
       </div>
 
-      <div className="hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] sm:block">
+      <div className="hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] md:block">
         <table className="w-full text-left text-sm">
           <thead className="text-xs uppercase tracking-wider text-[var(--muted)]">
             <tr className="border-b border-[var(--line)]">

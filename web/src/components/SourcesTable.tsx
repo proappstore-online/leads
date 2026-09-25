@@ -14,7 +14,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
   return (
     <>
       {/* Phones: one card per source; the card opens the source, its link opens the group itself. */}
-      <ul className="space-y-2 sm:hidden">
+      <ul className="space-y-2 md:hidden">
         {sources.map((s) => (
           <li key={s.id} onClick={() => onOpen(s.id)} className={card}>
             <div className="flex items-start justify-between gap-3">
@@ -42,7 +42,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
           <span className="font-semibold not-italic tabular-nums text-[var(--ink)]">{noSource} leads</span>
         </li>
       </ul>
-      <div className="hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] sm:block">
+      <div className="hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] md:block">
         <table className="w-full text-left text-sm">
           <thead className="text-xs uppercase tracking-wider text-[var(--muted)]">
             <tr className="border-b border-[var(--line)]">

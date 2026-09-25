@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { q } from '../lib/actions'
 import { STATUSES, type Lead, type SourceDetail } from '../types'
 import { ExternalLink } from './ExternalLink'
 import { Modal } from './Modal'
 import { wrapAnywhere } from './styles'
+import { EmptyState, LoadingState, RetryState } from './AsyncState'
 
 const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
 
@@ -22,20 +23,27 @@ export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, o
   const [source, setSource] = useState<SourceDetail | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let live = true
-    Promise.all([
-      q<SourceDetail>('get_source', { id: sourceId, project_id: projectId }),
-      q<Lead>('list_leads', { source_id: sourceId, project_id: projectId, sort: 'last_contact', dir: 'desc', limit: 500 }),
-    ]).then(([rows, leadRows]) => {
-      if (!live) return
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [rows, leadRows] = await Promise.all([
+        q<SourceDetail>('get_source', { id: sourceId, project_id: projectId }),
+        q<Lead>('list_leads', { source_id: sourceId, project_id: projectId, sort: 'last_contact', dir: 'desc', limit: 500 }),
+      ])
       setSource(rows[0] ?? null)
       setLeads(leadRows)
       if (!rows[0]) setError('This source no longer exists.')
-    }).catch((e) => live && setError(e instanceof Error ? e.message : String(e)))
-    return () => { live = false }
-  }, [sourceId, projectId, version])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [sourceId, projectId])
+
+  useEffect(() => { load() }, [load, version])
 
   const tiles: [string, string | number][] = source ? [
     ['Leads', source.leads],
@@ -50,8 +58,8 @@ export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, o
 
   return (
     <Modal title={source?.name ?? 'Source'} onClose={onClose}>
-      {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
-      {!source && !error && <p className="mt-4 text-sm text-[var(--muted)]">Loading…</p>}
+      {error && <div className="mt-4"><RetryState error={error} onRetry={load} /></div>}
+      {!source && !error && loading && <div className="mt-4"><LoadingState label="Loading source…" /></div>}
       {source && (
         <div className="mt-2 space-y-5 select-text">
           <div className="text-sm text-[var(--muted)]">
@@ -88,7 +96,7 @@ export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, o
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Leads from here ({leads.length})</h3>
             {leads.length === 0 ? (
-              <p className="mt-2 text-sm text-[var(--muted)]">No leads linked to this source yet.</p>
+              <div className="mt-2"><EmptyState action={<button type="button" onClick={onShowLeads} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 font-semibold text-[var(--ink)]">Show in leads table</button>}>No leads linked to this source yet. Add a lead and choose this source to see it here.</EmptyState></div>
             ) : (
               <ul className="mt-2 divide-y divide-[var(--line)] rounded-xl border border-[var(--line)]">
                 {leads.map((l) => (

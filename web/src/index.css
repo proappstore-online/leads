@@ -176,6 +176,21 @@ button:active {
   transform: scale(0.985);
 }
 
+/* A fingertip-sized target is enforced for every control on phones, including compact icon and
+   row actions. Check `pnpm --filter @leads/web qa:mobile` at 360px and 640px. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input:not([type='checkbox']):not([type='radio']),
+  textarea {
+    min-height: 44px;
+  }
+
+  button {
+    min-width: 44px;
+  }
+}
+
 :root[data-text='lg'] { font-size: 118.75%; }
 :root[data-text='sm'] { font-size: 87.5%; }
 

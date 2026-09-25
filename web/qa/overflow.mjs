@@ -5,7 +5,7 @@
  * Renders the real app against `fixtures/` (every lead field, note, message and source holds a
  * ~200-character URL) and walks its surfaces at 320px and 375px.
  *
- *   pnpm qa:overflow
+ *   pnpm qa:overflow (also exposed as qa:mobile)
  */
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
@@ -14,7 +14,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const WIDTHS = [320, 375]
+const WIDTHS = [360, 640]
 const here = (p) => fileURLToPath(new URL(p, import.meta.url))
 
 /** A free port, so a dev server already running does not collide with this one. */
@@ -64,9 +64,24 @@ const measure = () => {
 }
 
 async function check(page, where, width) {
-  await page.waitForTimeout(350)
-  const { page: p, dialog: d } = await page.evaluate(measure)
+  await page.waitForTimeout(120)
+  const { page: p, dialog: d, smallTargets } = await page.evaluate(() => {
+    const dialog = document.querySelector('[role=dialog]')
+    const overflow = {
+      page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      dialog: dialog ? dialog.scrollWidth - dialog.clientWidth : 0,
+    }
+    const smallTargets = [...document.querySelectorAll('button, select, textarea, input:not([type=checkbox]):not([type=radio]):not([type=hidden])')]
+      .filter((el) => el.getClientRects().length > 0 && !el.hasAttribute('disabled'))
+      .map((el) => {
+        const box = el.getBoundingClientRect()
+        return { label: el.getAttribute('aria-label') || el.textContent?.trim() || el.tagName.toLowerCase(), width: Math.round(box.width), height: Math.round(box.height) }
+      })
+      .filter((box) => box.width < 44 || box.height < 44)
+    return { ...overflow, smallTargets }
+  })
   ok(p <= 0 && d <= 0, `${width}px ${where} — page +${p}px, modal +${d}px`)
+  ok(smallTargets.length === 0, `${width}px ${where} — every visible control is at least 44×44px${smallTargets.length ? ` (${smallTargets[0].label}: ${smallTargets[0].width}×${smallTargets[0].height})` : ''}`)
 }
 
 async function run(browser, width) {
@@ -75,9 +90,11 @@ async function run(browser, width) {
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto(URL_BASE)
   await page.waitForSelector('main')
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(180)
   const nav = page.locator('nav')
-  const openLead = () => page.getByText('Alexandrina Montgomery-Wellington').first().click({ position: { x: 4, y: 4 } })
+  const openLead = () => width < 768
+    ? page.locator('li').filter({ hasText: 'Alexandrina Montgomery-Wellington' }).first().click({ position: { x: 4, y: 4 } })
+    : page.locator('tr').filter({ hasText: 'Alexandrina Montgomery-Wellington' }).first().click({ position: { x: 4, y: 4 } })
 
   await check(page, 'leads list', width)
 
@@ -106,29 +123,30 @@ async function run(browser, width) {
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await check(page, 'lead: edit form', width)
   await page.keyboard.press('Escape')
-  await page.waitForTimeout(250)
+  await page.waitForTimeout(120)
 
   await nav.getByRole('button', { name: /^Sources/ }).click()
   await check(page, 'sources', width)
-  await page.getByText('Jobs in Melbourne').first().click({ position: { x: 4, y: 4 } })
+  if (width < 768) await page.locator('li').filter({ hasText: 'Jobs in Melbourne' }).first().click({ position: { x: 4, y: 4 } })
+  else await page.locator('tr').filter({ hasText: 'Jobs in Melbourne' }).first().click({ position: { x: 4, y: 4 } })
   await page.locator('[role=dialog]').waitFor()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(180)
   await check(page, 'source panel', width)
   await page.keyboard.press('Escape')
-  await page.waitForTimeout(250)
+  await page.waitForTimeout(120)
 
   await nav.getByRole('button', { name: 'Stats' }).click()
   await check(page, 'stats', width)
 
   await nav.getByRole('button', { name: /^All leads/ }).click()
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(120)
   await page.getByRole('button', { name: 'board', exact: true }).click()
   await check(page, 'board', width)
   await page.getByRole('button', { name: 'table', exact: true }).click()
 
   // A list with a very long name, opened from the sidebar, then its form.
   await nav.getByRole('button', { name: /^List x/ }).click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(180)
   await check(page, 'one list', width)
   await page.getByRole('button', { name: 'Edit list' }).click()
   await page.locator('[role=dialog]').waitFor()

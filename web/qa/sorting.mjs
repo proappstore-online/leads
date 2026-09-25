@@ -47,7 +47,7 @@ const ok = (pass, what) => {
 
 /** First names in the order they are rendered: the table on a wide screen, the cards on a phone. */
 async function names(page, wide) {
-  const sel = wide ? 'table tbody tr td:first-child > div:first-child' : 'div.sm\\:hidden ul > li > div:first-child'
+  const sel = wide ? 'table tbody tr td:first-child > div:first-child' : 'div.md\\:hidden ul > li > div:first-child'
   return page.$$eval(sel, (els) => els.map((e) => e.textContent.trim().split(' ')[0]))
 }
 

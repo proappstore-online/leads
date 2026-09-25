@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { q, x } from '../lib/actions'
 import { Modal } from './Modal'
+import { LoadingState, RetryState } from './AsyncState'
 
 interface Invite {
   project_id: string
@@ -23,11 +24,15 @@ export function JoinProject({ code, userName, onClose, onJoined }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+  const loadInvite = () => {
+    setInvite(undefined)
+    setError('')
     q<Invite>('get_project_invite', { code })
       .then((rows) => setInvite(rows[0] ?? null))
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [code])
+  }
+
+  useEffect(() => { loadInvite() }, [code])
 
   async function join() {
     setSaving(true)
@@ -41,7 +46,7 @@ export function JoinProject({ code, userName, onClose, onJoined }: {
   }
 
   const message = invite === undefined
-    ? (error ? '' : 'Checking the invite…')
+    ? ''
     : invite === null
       ? 'This invite link is not valid any more — it was used, cancelled or has expired. Ask for a new one.'
       : invite.is_owner
@@ -54,8 +59,8 @@ export function JoinProject({ code, userName, onClose, onJoined }: {
 
   return (
     <Modal title="Join a project" onClose={onClose}>
-      <p className="mt-4 select-text text-sm text-[var(--ink)]">{message}</p>
-      {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
+      {invite === undefined && !error ? <div className="mt-4"><LoadingState label="Checking the invite…" /></div> : <p className="mt-4 select-text text-sm text-[var(--ink)]">{message}</p>}
+      {error && <div className="mt-4"><RetryState error={error} onRetry={loadInvite} /></div>}
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onClose} aria-label={canJoin ? 'Not now' : 'Close'} className="rounded-xl px-4 py-2 text-sm font-semibold text-[var(--muted)] hover:bg-[var(--line)]">{canJoin ? 'Not now' : 'Close'}</button>
         {canJoin && <button type="button" onClick={join} disabled={saving} className="rounded-xl bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Join project</button>}

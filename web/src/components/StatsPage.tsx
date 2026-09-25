@@ -4,6 +4,7 @@ import { summariseChanges, type HistoryNames } from '../lib/history'
 import { projectOf } from '../lib/lead'
 import { FITS, STATUSES, type LeadList, type Source } from '../types'
 import { BarChart } from './BarChart'
+import { EmptyState, LoadingState, RetryState } from './AsyncState'
 
 interface Bucket {
   leads_added: number
@@ -83,7 +84,7 @@ function describe(e: Activity, names: HistoryNames): string {
 }
 
 /** Charts and activity: what came in, what agents did, and where the pipeline stands. */
-export function StatsPage({ lists, sources, people, projectId, version, onOpenLead }: {
+export function StatsPage({ lists, sources, people, projectId, version, onOpenLead, onAddLead }: {
   lists: LeadList[]
   sources: Source[]
   /** Names by user id, for a change that reassigned a lead. */
@@ -93,6 +94,7 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
   /** Bumped by the parent after any save, so the page reloads. */
   version: number
   onOpenLead: (id: string) => void
+  onAddLead: () => void
 }) {
   const [range, setRange] = useState<RangeKey>('30d')
   const [sourceId, setSourceId] = useState('')
@@ -102,7 +104,10 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
   const [pipeline, setPipeline] = useState<Pipeline | null>(null)
   const [feed, setFeed] = useState<Activity[]>([])
   const [feedMore, setFeedMore] = useState(false)
-  const [error, setError] = useState('')
+  const [dataLoading, setDataLoading] = useState(true)
+  const [feedLoading, setFeedLoading] = useState(true)
+  const [dataError, setDataError] = useState('')
+  const [feedError, setFeedError] = useState('')
 
   const { pairs, labels } = useMemo(() => buckets(range), [range])
   const names = useMemo<HistoryNames>(() => ({ people, sources }), [people, sources])
@@ -112,33 +117,42 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
     return { source_id: sourceId || null, list_id: list ? list.id : null, project_id: list ? projectOf(list) : projectId }
   }, [sourceId, listId, lists, projectId])
 
-  useEffect(() => {
-    let live = true
+  const loadStats = useCallback(async () => {
+    setDataLoading(true)
+    setDataError('')
     const whole: [number, number][] = [[pairs[0][0], pairs[pairs.length - 1][1]]]
-    Promise.all([
-      q<Bucket>('stats_timeline', { buckets: JSON.stringify(pairs), ...filters }),
-      // One bucket over the whole range, so "leads who replied" counts each lead once.
-      q<Bucket>('stats_timeline', { buckets: JSON.stringify(whole), ...filters }),
-      q<Pipeline>('stats_pipeline', filters),
-    ]).then(([rows, total, pipe]) => {
-      if (!live) return
+    try {
+      const [rows, total, pipe] = await Promise.all([
+        q<Bucket>('stats_timeline', { buckets: JSON.stringify(pairs), ...filters }),
+        // One bucket over the whole range, so "leads who replied" counts each lead once.
+        q<Bucket>('stats_timeline', { buckets: JSON.stringify(whole), ...filters }),
+        q<Pipeline>('stats_pipeline', filters),
+      ])
       setData({ pairs, series: rows, totals: total[0] ?? null })
       setPipeline(pipe[0] ?? null)
-      setError('')
-    }).catch((e) => live && setError(e instanceof Error ? e.message : String(e)))
-    return () => { live = false }
-  }, [pairs, filters, version])
+    } catch (e) {
+      setDataError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDataLoading(false)
+    }
+  }, [pairs, filters])
+
+  useEffect(() => { loadStats() }, [loadStats, version])
 
   const feedRequest = useRef(0)
   const loadFeed = useCallback(async (last: Activity | null) => {
     const id = ++feedRequest.current
+    setFeedLoading(true)
+    setFeedError('')
     try {
       const rows = await q<Activity>('recent_activity', { limit: FEED_PAGE, before: last?.at ?? null, before_k: last?.k ?? null, source_id: sourceId || null, project_id: projectId })
       if (id !== feedRequest.current) return // a newer request (other filter) superseded this one
       setFeed((prev) => (last ? [...prev, ...rows] : rows))
       setFeedMore(rows.length === FEED_PAGE)
     } catch (e) {
-      if (id === feedRequest.current) setError(e instanceof Error ? e.message : String(e))
+      if (id === feedRequest.current) setFeedError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (id === feedRequest.current) setFeedLoading(false)
     }
   }, [sourceId, projectId])
 
@@ -181,8 +195,7 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
         </select>
       </div>
 
-      {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
-
+      {dataError ? <div className="mt-4"><RetryState error={dataError} onRetry={loadStats} /></div> : dataLoading && !current ? <div className="mt-4"><LoadingState label="Loading statistics…" /></div> : <>
       <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {tiles.map(([label, value]) => (
           <div key={label} className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2">
@@ -230,12 +243,13 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
           </p>
         </section>
       )}
+      </>}
 
       <section className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4">
         <h2 className="text-sm font-semibold text-[var(--ink)]">Recent activity</h2>
         <p className="text-xs text-[var(--muted)]">Newest first, each at the time it happened. Changes and notes start when the lead history was added; older edits are not listed.</p>
-        {feed.length === 0 ? (
-          <p className="mt-3 text-sm text-[var(--muted)]">Nothing yet.</p>
+        {feedError ? <div className="mt-3"><RetryState error={feedError} onRetry={() => loadFeed(null)} /></div> : feedLoading && feed.length === 0 ? <div className="mt-3"><LoadingState label="Loading recent activity…" /></div> : feed.length === 0 ? (
+          <EmptyState action={<button type="button" onClick={onAddLead} className="rounded-xl bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--paper)]">Add lead</button>}>No activity yet. Add a lead, source, note or message to start the timeline.</EmptyState>
         ) : (
           <ol className="mt-2 divide-y divide-[var(--line)]">
             {feed.map((e) => (

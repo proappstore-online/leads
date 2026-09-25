@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "qa:overflow": "node qa/overflow.mjs",
+    "qa:mobile": "node qa/overflow.mjs",
     "qa:sorting": "node qa/sorting.mjs",
     "qa:activity": "node qa/activity.mjs"
   },

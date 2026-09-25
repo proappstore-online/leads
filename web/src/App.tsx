@@ -18,6 +18,7 @@ import { SourcesTable } from './components/SourcesTable'
 import { StatsPage } from './components/StatsPage'
 import { SignIn } from './components/SignIn'
 import { TopBar } from './components/TopBar'
+import { EmptyState, LoadingState, RetryState } from './components/AsyncState'
 
 const PAGE = 200
 
@@ -38,7 +39,7 @@ if (joinParam) {
  * which is also where lists made before projects live.
  */
 export default function App() {
-  const { user, loading } = useProAuth(app)
+  const { user, loading, signOut } = useProAuth(app)
   const [projects, setProjects] = useState<Project[]>([])
   const [loaded, setLoaded] = useState(false)
   const [project, setProject] = useState<string | null>(() => localStorage.getItem(PROJECT_KEY))
@@ -49,6 +50,8 @@ export default function App() {
   const [error, setError] = useState('')
 
   const loadProjects = useCallback(async () => {
+    setError('')
+    setLoaded(false)
     try {
       // 0010 leaves the deployed composite-key tables intact. Copy this caller's
       // rows before any action reads the stable-ID replacements.
@@ -96,7 +99,8 @@ export default function App() {
   }
 
   // ProShell's own signed-out gate is GitHub-only; ours offers Google too.
-  if (!loading && !user) return <SignIn />
+  if (loading) return <div className="mx-auto flex min-h-dvh w-full max-w-7xl items-center px-4"><LoadingState label="Checking your session…" /></div>
+  if (!user) return <SignIn />
 
   const changed = () => setProjectsVersion((v) => v + 1)
   const closeJoin = () => {
@@ -123,8 +127,9 @@ export default function App() {
         />
       )}
     >
-      {error && <p className="mx-auto w-full max-w-7xl px-4 pt-4 text-sm text-[var(--error)] lg:px-6">{error}</p>}
-      {project !== null && (
+      {!loaded && !error && <div className="mx-auto w-full max-w-7xl px-4 pt-5 lg:px-6"><LoadingState label="Loading your projects…" /></div>}
+      {!loaded && error && <div className="mx-auto w-full max-w-7xl px-4 pt-5 lg:px-6"><RetryState error={error} onRetry={loadProjects} onSignOut={signOut} /></div>}
+      {loaded && project !== null && (
         <Home
           key={project}
           userId={user?.id ?? ''}
@@ -199,7 +204,11 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   const [leads, setLeads] = useState<Lead[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [listsLoading, setListsLoading] = useState(true)
+  const [sourcesLoading, setSourcesLoading] = useState(true)
+  const [listsError, setListsError] = useState('')
+  const [sourcesError, setSourcesError] = useState('')
+  const [leadsError, setLeadsError] = useState('')
   const [listId, setListId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
@@ -214,6 +223,8 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   const request = useRef(0)
 
   const loadLists = useCallback(async () => {
+    setListsLoading(true)
+    setListsError('')
     try {
       const [rows, count, memberRows, tagRows] = await Promise.all([
         q<LeadList>('list_lists', { project_id: scope }),
@@ -230,18 +241,24 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       setNoSource(count[0]?.no_source ?? 0)
       setAssignedCount(count[0]?.assigned_to_me ?? 0)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setListsError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setListsLoading(false)
     }
   }, [scope, projectsVersion])
 
   const sourcesRequest = useRef(0)
   const loadSources = useCallback(async () => {
     const id = ++sourcesRequest.current
+    setSourcesLoading(true)
+    setSourcesError('')
     try {
       const rows = await q<Source>('list_sources', { sort: sourceSort, project_id: scope })
       if (id === sourcesRequest.current) setSources(rows) // ignore a slower, older response
     } catch (e) {
-      if (id === sourcesRequest.current) setError(e instanceof Error ? e.message : String(e))
+      if (id === sourcesRequest.current) setSourcesError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (id === sourcesRequest.current) setSourcesLoading(false)
     }
   }, [sourceSort, scope])
 
@@ -250,6 +267,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   const loadLeads = useCallback(async (offset: number) => {
     const id = ++request.current
     setLoading(true)
+    setLeadsError('')
     try {
       const rows = assignedOnly
         ? await q<Lead>('list_assigned_leads', { project_id: scope, status: status || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
@@ -262,9 +280,8 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       if (id !== request.current) return // a newer filter superseded this request
       setLeads((prev) => (offset ? [...prev, ...rows] : rows))
       setHasMore(rows.length === PAGE)
-      setError('')
     } catch (e) {
-      if (id === request.current) setError(e instanceof Error ? e.message : String(e))
+      if (id === request.current) setLeadsError(e instanceof Error ? e.message : String(e))
     } finally {
       if (id === request.current) setLoading(false)
     }
@@ -290,9 +307,9 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
     try {
       const [lead] = await q<Lead>('get_lead', { id })
       if (lead) setEditingLead(lead)
-      else setError('That lead no longer exists.')
+      else setLeadsError('That lead no longer exists.')
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setLeadsError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -336,7 +353,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       refresh()
     } catch (e) {
       setLeads((rows) => rows.map((l) => (l.id === lead.id ? { ...l, status: lead.status } : l)))
-      setError(e instanceof Error ? e.message : String(e))
+      setLeadsError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -373,6 +390,8 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
       <nav aria-label="Lead lists" className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
+        {listsLoading && <span role="status" className="shrink-0 px-3 py-2 text-sm text-[var(--muted)]">Loading lists…</span>}
+        {listsError && <div className="min-w-72 lg:min-w-0"><RetryState error={listsError} onRetry={loadLists} /></div>}
         <button type="button" onClick={() => { browse({}); setSourceId('') }} className={chip(view === 'leads' && listId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
           <span>All leads</span>
           <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
@@ -404,7 +423,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       </nav>
 
       {view === 'stats' ? (
-        <StatsPage lists={lists} sources={sources} people={people} projectId={scope} version={version} onOpenLead={openLeadById} />
+        <StatsPage lists={lists} sources={sources} people={people} projectId={scope} version={version} onOpenLead={openLeadById} onAddLead={() => setEditingLead('new')} />
       ) : view === 'sources' ? (
       <main id="main-content" className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -424,14 +443,16 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             <button type="button" onClick={() => setEditingSource('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)]">Add source</button>
           </div>
         </div>
-        {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
         <div className="mt-4">
-          <SourcesTable
-            sources={sources}
-            noSource={noSource}
-            onOpen={(id) => { if (id === 'none') showSourceLeads('none'); else setViewingSourceId(id) }}
-            onEdit={setEditingSource}
-          />
+          {sourcesError ? <RetryState error={sourcesError} onRetry={loadSources} />
+            : sourcesLoading ? <LoadingState label="Loading sources…" />
+              : sources.length === 0 && noSource === 0 ? <EmptyState action={<button type="button" onClick={() => setEditingSource('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--paper)]">Add source</button>}>No sources yet. Add the places where you find leads.</EmptyState>
+                : <SourcesTable
+                    sources={sources}
+                    noSource={noSource}
+                    onOpen={(id) => { if (id === 'none') showSourceLeads('none'); else setViewingSourceId(id) }}
+                    onEdit={setEditingSource}
+                  />}
         </div>
       </main>
       ) : (
@@ -532,17 +553,15 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
           </>}
         </div>
 
-        {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
-
         <div className="mt-4">
-          {leads.length > 0 ? (
+          {leadsError ? <RetryState error={leadsError} onRetry={() => loadLeads(0)} /> : leads.length > 0 ? (
             layout === 'board'
               ? <LeadBoard leads={leads} people={people} onOpen={setEditingLead} onMove={moveLead} />
               : <LeadTable leads={leads} lists={lists} projects={projects} people={people} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
-          ) : (
-            <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-6 py-12 text-center text-sm text-[var(--muted)]">
-              {loading ? 'Loading…' : attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo || tag || followUp ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : scope ? 'No leads in this project yet. Add one, or switch project in the top bar.' : 'No leads yet. Add your first one.'}
-            </p>
+          ) : loading ? <LoadingState label="Loading leads…" /> : (
+            <EmptyState action={!attentionOnly && !followUpsOnly && !assignedOnly && !(search || status || fit || country || sourceId || assignedTo || tag || followUp) ? <button type="button" onClick={() => setEditingLead('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--paper)]">Add lead</button> : undefined}>
+              {attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo || tag || followUp ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : scope ? 'No leads in this project yet. Add one, or switch project in the top bar.' : 'No leads yet. Add your first one.'}
+            </EmptyState>
           )}
           {hasMore && (
             <button type="button" onClick={() => loadLeads(leads.length)} disabled={loading} className="mt-3 w-full rounded-xl border border-[var(--line-strong)] py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-60">

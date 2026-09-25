@@ -349,9 +349,9 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
           <legend className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Your fields</legend>
           <div className="mt-2 space-y-2">
             {customRows.map(([key, value], i) => (
-              <div key={i} className="flex gap-2">
-                <input type="text" aria-label="Field name" value={key} onChange={(e) => setCustomRows((rows) => rows.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} placeholder="Field, e.g. Budget" className={`${inputClass} mt-0 w-2/5`} />
-                <input type="text" aria-label="Field value" value={value} onChange={(e) => setCustomRows((rows) => rows.map((r, j) => (j === i ? [r[0], e.target.value] : r)))} placeholder="Value" className={`${inputClass} mt-0 min-w-0 flex-1`} />
+              <div key={i} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] gap-2">
+                <input type="text" aria-label="Field name" value={key} onChange={(e) => setCustomRows((rows) => rows.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} placeholder="Field, e.g. Budget" className={`${inputClass} mt-0 min-w-0`} />
+                <input type="text" aria-label="Field value" value={value} onChange={(e) => setCustomRows((rows) => rows.map((r, j) => (j === i ? [r[0], e.target.value] : r)))} placeholder="Value" className={`${inputClass} mt-0 min-w-0`} />
                 <button type="button" aria-label="Remove field" onClick={() => setCustomRows((rows) => rows.filter((_, j) => j !== i))} className="shrink-0 rounded-lg px-3 text-lg text-[var(--muted)] hover:bg-[var(--line)]">×</button>
               </div>
             ))}
