@@ -4,7 +4,7 @@ Lead management on [ProAppStore](https://proappstore.online): one database of al
 
 - Live: https://leads.proappstore.online
 - Dev: `pnpm install && pnpm dev`
-- Deploy: `git push origin main`
+- Deploy: `git push origin main` - then `e2e/` smoke-tests the live app; see [VERIFICATION.md](VERIFICATION.md) for the deploy evidence and the human checklists
 
 ## Data retention and deletion
 

@@ -39,9 +39,17 @@ jobs:
       - name: Locate build output
         id: dist
         run: |
-          if [ -d web/dist ]; then echo "dir=web/dist" >> "$GITHUB_OUTPUT"
-          elif [ -d dist ]; then echo "dir=dist" >> "$GITHUB_OUTPUT"
+          if [ -d web/dist ]; then dir=web/dist
+          elif [ -d dist ]; then dir=dist
           else echo "::error::No build output (looked for ./dist and ./web/dist)"; exit 1; fi
+          # Guard (#195): "Upload to R2" runs aws s3 sync --delete, which mirrors
+          # this directory onto the app's live prefix. A present-but-empty build
+          # (or one without an entry page) would delete every object of the
+          # running app. Refuse to deploy instead.
+          if [ ! -f "$dir/index.html" ]; then
+            echo "::error::$dir has no index.html — refusing to deploy (sync --delete would wipe the live app)"; exit 1
+          fi
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
 
       - name: Code-health scan (VCQA, report-only)
         continue-on-error: true
@@ -54,7 +62,7 @@ jobs:
           fi
 
       - name: Apply D1 migrations (migrations.json -> platform, keyless)
-        if: hashFiles('migrations.json') != '' && github.event.repository.name != 'template-app'
+        if: hashFiles('migrations.json') != '' && !startsWith(github.event.repository.name, 'template-')
         run: |
           # Schema before code: apply the committed, additive-only migrations to
           # this app's D1 BEFORE the new frontend uploads and BEFORE mcp.json
@@ -74,6 +82,32 @@ jobs:
             echo "Applied migration(s): $(echo "$RESP" | jq -c '.applied // []'); already: $(echo "$RESP" | jq -c '.already // []')"
           else
             echo "::error::migration failed: $(echo "$RESP" | jq -c '.error // .')"; exit 1
+          fi
+
+      - name: Register app tools (mcp.json -> platform, keyless)
+        if: hashFiles('mcp.json') != '' && !startsWith(github.event.repository.name, 'template-')
+        run: |
+          # Registered actions must never drift from the committed manifest:
+          # re-register mcp.json on every deploy, authorized by the same
+          # verified GitHub OIDC claims as the deploy-credentials mint.
+          # ORDER MATTERS (#120): this runs BEFORE the R2 upload. A rejected
+          # manifest must block the deploy — registering after the upload left
+          # the new frontend live with the previous revision's actions.
+          OIDC=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.proappstore.online" | jq -r '.value')
+          if [ -z "$OIDC" ] || [ "$OIDC" = "null" ]; then echo "::error::could not obtain OIDC token"; exit 1; fi
+          RESP=$(curl -sS -X PUT \
+            "https://api.proappstore.online/v1/apps/${{ github.event.repository.name }}/tools/oidc" \
+            -H "Authorization: Bearer $OIDC" -H "Content-Type: application/json" \
+            --data-binary @mcp.json)
+          if echo "$RESP" | jq -e '.ok == true' >/dev/null; then
+            echo "Registered $(echo "$RESP" | jq -r '.registered') app tool(s)"
+            echo "$RESP" | jq -r '.warnings[]? | "::warning::mcp.json: " + .'
+          else
+            echo "::error::tools registration failed: $(echo "$RESP" | jq -c '.error // .')"
+            # Schema coherence (#33): name each action + the missing column/table.
+            echo "$RESP" | jq -r '.details[]? | "::error::" + .'
+            exit 1
           fi
 
       - name: Mint deploy credentials (keyless — GitHub OIDC → platform)
@@ -107,29 +141,6 @@ jobs:
             --delete --no-progress
           echo "Deployed apps/${{ github.event.repository.name }} from ${{ github.sha }}"
 
-      - name: Register app tools (mcp.json -> platform, keyless)
-        if: hashFiles('mcp.json') != '' && github.event.repository.name != 'template-app'
-        run: |
-          # Registered actions must never drift from the committed manifest:
-          # re-register mcp.json on every deploy, authorized by the same
-          # verified GitHub OIDC claims as the deploy-credentials mint.
-          OIDC=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.proappstore.online" | jq -r '.value')
-          if [ -z "$OIDC" ] || [ "$OIDC" = "null" ]; then echo "::error::could not obtain OIDC token"; exit 1; fi
-          RESP=$(curl -sS -X PUT \
-            "https://api.proappstore.online/v1/apps/${{ github.event.repository.name }}/tools/oidc" \
-            -H "Authorization: Bearer $OIDC" -H "Content-Type: application/json" \
-            --data-binary @mcp.json)
-          if echo "$RESP" | jq -e '.ok == true' >/dev/null; then
-            echo "Registered $(echo "$RESP" | jq -r '.registered') app tool(s)"
-            echo "$RESP" | jq -r '.warnings[]? | "::warning::mcp.json: " + .'
-          else
-            echo "::error::tools registration failed: $(echo "$RESP" | jq -c '.error // .')"
-            # Schema coherence (#33): name each action + the missing column/table.
-            echo "$RESP" | jq -r '.details[]? | "::error::" + .'
-            exit 1
-          fi
-
   # Behavioural gate: drive the LIVE app in a real browser (the thing tsc/build
   # can't check). Runs after deploy; a failure fails the run, so the deploy
   # gate routes the ticket back to Dev with the Playwright output. Auth uses a
@@ -150,13 +161,34 @@ jobs:
       - name: Install Playwright browser
         working-directory: e2e
         run: npx playwright install --with-deps chromium
+      - name: Sign-in session for the smoke (keyless OIDC grant, else PAS_E2E_SESSION_TOKEN)
+        env:
+          FALLBACK_SESSION: ${{ secrets.PAS_E2E_SESSION_TOKEN }}
+        run: |
+          # A platform admin grants this repo an e2e account once
+          # (POST /v1/admin/oidc-session-grants); from then on every run exchanges
+          # its GitHub OIDC token for a real four-hour session - nothing stored.
+          OIDC=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.proappstore.online" | jq -r '.value // empty')
+          SESSION=""
+          if [ -n "$OIDC" ]; then
+            SESSION=$(curl -sS -X POST https://api.proappstore.online/v1/auth/exchange/oidc \
+              -H "Authorization: Bearer $OIDC" | jq -r '.sessionToken // empty' 2>/dev/null || true)
+          fi
+          [ -n "$SESSION" ] || SESSION="$FALLBACK_SESSION"
+          if [ -n "$SESSION" ]; then
+            echo "::add-mask::$SESSION"
+            echo "E2E_SESSION_TOKEN=$SESSION" >> "$GITHUB_ENV"
+            echo "Signed-in smoke: enabled"
+          else
+            echo "::warning::No e2e session (no OIDC session grant for this repo, no PAS_E2E_SESSION_TOKEN): the signed-in smoke is SKIPPED, so PAS-OPS-010 is not met. See VERIFICATION.md."
+          fi
       - name: Run E2E against the live app
         id: e2e
         continue-on-error: true
         working-directory: e2e
         env:
           E2E_BASE_URL: https://${{ github.event.repository.name }}.proappstore.online
-          E2E_SESSION_TOKEN: ${{ secrets.PAS_E2E_SESSION_TOKEN }}
         run: npx playwright test
       - name: Publish test results (kb.proappstore.online/<app>/.e2e/summary.json)
         if: always()

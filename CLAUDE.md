@@ -7,6 +7,9 @@ profiles, browsed through lists — one list per purpose or role.
 - Dev: `pnpm install && pnpm dev`
 - Build: `pnpm build` (runs platform compliance check via prebuild)
 - Deploy: `git push origin main` (auto-deploys via GitHub Actions → R2)
+- After each deploy `e2e/` (Playwright, npm) drives the live app: signed-out checks always, a
+  signed-in read/write/sign-out once the repo has an e2e session grant. `VERIFICATION.md` holds the
+  deploy-evidence script and the human checklists an agent must never mark as passed.
 
 Platform conventions: https://proappstore.online/skills.md
 

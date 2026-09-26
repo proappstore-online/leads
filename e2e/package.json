@@ -1,0 +1,12 @@
+{
+  "name": "@leads/e2e",
+  "private": true,
+  "type": "module",
+  "description": "Post-deploy smoke: drives the LIVE app after every deploy (deploy.yml runs it when e2e/ exists).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

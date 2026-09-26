@@ -8,3 +8,7 @@ dist/
 .vite/
 .vibe-check/
 .pas.json
+e2e/test-results/
+e2e/playwright-report/
+e2e/results.json
+e2e/summary.json
