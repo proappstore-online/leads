@@ -30,7 +30,7 @@ function findChromium() {
     if (!existsSync(dir)) continue
     for (const build of readdirSync(dir).filter((d) => d.startsWith('chromium')).sort().reverse()) {
       for (const rel of ['chrome-headless-shell-mac-x64/chrome-headless-shell', 'chrome-headless-shell-mac-arm64/chrome-headless-shell',
-        'chrome-headless-shell-linux/chrome-headless-shell', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium', 'chrome-linux/chrome']) {
+        'chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-headless-shell-linux/chrome-headless-shell', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium', 'chrome-linux64/chrome', 'chrome-linux/chrome']) {
         const exe = join(dir, build, rel)
         if (existsSync(exe)) return exe
       }
