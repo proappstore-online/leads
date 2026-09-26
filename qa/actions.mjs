@@ -85,6 +85,11 @@ export const ok = (pass, what) => {
   if (!pass) failures++
 }
 
+// The platform refuses to register any tool whose SQL holds a semicolon, even inside a string
+// literal, and the whole deploy fails at that step.
+const semicolons = Object.values(TOOLS).filter((t) => [t.sql ?? '', ...(t.statements ?? [])].some((s) => s.includes(';')))
+ok(semicolons.length === 0, `no action SQL contains a semicolon (${semicolons.map((t) => t.name).join(', ') || 'none'})`)
+
 // --- #12: the activity feed uses each event's own time ----------------------------------------
 const O = 'owner'
 const P = randomUUID()

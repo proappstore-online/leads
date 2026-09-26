@@ -18,7 +18,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Install Chromium for browser QA
-        run: pnpm --filter @leads/web exec playwright install --with-deps chromium
+        run: pnpm --filter @leads/web exec playwright-core install --with-deps chromium
       - run: pnpm run prebuild
       - run: pnpm typecheck
       # The manifest tests: every registered action in mcp.json run against a
