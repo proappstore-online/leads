@@ -34,7 +34,7 @@ for wf in CI "Platform Compliance" "Deploy to R2"; do
       echo "    $(line '^Applied migration' "$log")"
       echo "    $(line '^Registered [0-9]+ app tool' "$log")"
       echo "    $(line '^Deployed apps/' "$log")"
-      echo "    session: $(line '^Signed-in smoke|No e2e session' "$log" | sed 's/^##\[warning\]//')"
+      echo "    session: $(line '^Signed-in smoke: enabled|^##\[warning\]No e2e session' "$log" | sed 's/^##\[warning\]//')"
       echo "    e2e: $(grep -E '^ +[0-9]+ (passed|failed|skipped|flaky)' <<<"$log" | tr -s ' ' | paste -sd, - || echo '(no e2e job output)')" ;;
   esac
 done
