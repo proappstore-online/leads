@@ -26,6 +26,9 @@ export function LeadBoard({ leads, people, onOpen, onMove }: {
   }
 
   return (
+    <>
+    {/* Touch screens cannot drag between columns. */}
+    <p className="mb-2 text-xs text-[var(--muted)] sm:hidden">Swipe across for more columns. To move a lead, use the menu on its card.</p>
     <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:snap-none lg:px-0 xl:grid xl:grid-cols-6 xl:gap-2 xl:overflow-visible xl:pb-0">
       {STATUSES.map((status) => {
         const column = leads.filter((l) => l.status === status)
@@ -76,11 +79,12 @@ export function LeadBoard({ leads, people, onOpen, onMove }: {
                   </select>
                 </li>
               ))}
-              {column.length === 0 && <li className="rounded-xl border border-dashed border-[var(--line-strong)] px-3 py-4 text-center text-xs text-[var(--muted)]">Drop a lead here</li>}
+              {column.length === 0 && <li className="rounded-xl border border-dashed border-[var(--line-strong)] px-3 py-4 text-center text-xs text-[var(--muted)]"><span className="sm:hidden">No leads</span><span className="hidden sm:inline">Drop a lead here</span></li>}
             </ul>
           </section>
         )
       })}
     </div>
+    </>
   )
 }

@@ -95,7 +95,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-t-2xl border border-[var(--line)] bg-[var(--paper)] p-5 shadow-[var(--shadow-soft)] sm:rounded-2xl sm:p-6"
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="display-font min-w-0 break-words text-xl font-bold text-[var(--ink)]">{title}</h2>
+          <h2 className="display-font line-clamp-2 min-w-0 break-words text-lg font-bold text-[var(--ink)] sm:text-xl">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 rounded-lg px-3 py-1.5 text-2xl leading-none text-[var(--muted)] hover:bg-[var(--line)]">×</button>
         </div>
         {children}

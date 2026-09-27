@@ -312,6 +312,7 @@ const SKIP = {
   get_project_invite: 'the invite code IS the grant — reading it by code is how joining works',
   join_project: 'the grant path; its one-shot behaviour is tested below',
   check_lead_links: 'validates the caller\'s own input and touches no rows',
+  update_display_name: 'takes no ids and renames only the caller\'s own rows; tested below',
 }
 /** Executes where the stranger creates a row of their OWN (owner-less); it must carry the stranger's id. */
 const SELF_CREATE = { create_project: 'projects', create_source: 'sources', create_lead: 'leads' }
@@ -369,6 +370,25 @@ const again = call('join_project', S, { code: CODE, display_name: 'Eve' })
 ok(again.every((c) => c === 0), `the same code cannot be redeemed twice (${again.join(',')})`)
 ok(call('list_project_members', O, { project_id: P }).filter((m) => m.user_id === S).length === 1, 'the owner sees the new member exactly once')
 ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code no longer resolves')
+
+// #36: the profile's display name renames only the caller's own project and membership rows.
+{
+  const others = () => JSON.stringify(db.prepare('SELECT id, owner_name FROM projects WHERE user_id <> ? ORDER BY id').all(S))
+    + JSON.stringify(db.prepare('SELECT id, display_name FROM project_memberships WHERE user_id <> ? ORDER BY id').all(S))
+  const before = others()
+  const renamed = call('update_display_name', S, { display_name: '  Sam Stranger  ' })
+  ok(renamed[1] >= 1, `a member's rename reaches their memberships (${renamed.join(',')})`)
+  ok(call('list_project_members', O, { project_id: P }).find((m) => m.user_id === S)?.display_name === 'Sam Stranger', 'the owner sees the member\'s new name, trimmed')
+  ok(call('get_display_name', S)[0]?.name === 'Sam Stranger', 'get_display_name returns the name just set')
+  ok(others() === before, 'nobody else\'s project or membership name changed')
+  for (const bad of ['   ', 'x'.repeat(81)]) {
+    const refused = call('update_display_name', S, { display_name: bad })
+    ok(refused.every((c) => c === 0) && call('get_display_name', S)[0]?.name === 'Sam Stranger', `a ${bad.trim() ? '81-character' : 'blank'} name changes nothing (${refused.join(',')})`)
+  }
+  const ownerRenamed = call('update_display_name', O, { display_name: 'Olivia' })
+  ok(ownerRenamed[0] >= 1 && call('list_projects', S).some((p) => p.id === P && p.owner_name === 'Olivia'), `a member sees the owner's new name on the shared project (${ownerRenamed.join(',')})`)
+  ok(call('get_display_name', 'nobody-yet').length === 0, 'a user with no projects has no stored name')
+}
 
 // PAS-OPS-017 (platform#186): delete_my_data leaves NO row for that user in any table, and
 // nobody else's rows change except the two cross-user links it must sever (assignment, project

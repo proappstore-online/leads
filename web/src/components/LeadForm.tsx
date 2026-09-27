@@ -252,8 +252,9 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
             Follow up
             {followUp.at !== null && followUp.at <= endOfToday() && <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-xs font-bold text-[var(--paper)]">{followUp.at <= Date.now() ? 'Due' : 'Today'}</span>}
           </span>
-          <input type="datetime-local" aria-label="Follow-up date" value={followAt} onChange={(e) => setFollowAt(e.target.value)} className={`${inputClass} mt-0 w-auto`} />
-          <input type="text" aria-label="Next action" value={followAction} onChange={(e) => setFollowAction(e.target.value)} placeholder="Next action, e.g. call about the demo" className={`${inputClass} mt-0 min-w-0 flex-1 basis-48`} />
+          {/* Phones: date and next action on their own lines, Save and Clear below. */}
+          <input type="datetime-local" aria-label="Follow-up date" value={followAt} onChange={(e) => setFollowAt(e.target.value)} className={`${inputClass} mt-0 sm:w-auto`} />
+          <input type="text" aria-label="Next action" value={followAction} onChange={(e) => setFollowAction(e.target.value)} placeholder="Next action, e.g. call about the demo" className={`${inputClass} mt-0 min-w-0 basis-full sm:flex-1 sm:basis-48`} />
           <button type="button" disabled={saving || !followAt} onClick={() => saveInPlace('set_follow_up', { at: new Date(followAt).getTime(), action: followAction.trim() || null }, 'Not saved - this lead is no longer yours to work.')} className="rounded-xl border border-[var(--line-strong)] px-3 py-2 font-semibold text-[var(--ink)] disabled:opacity-40">Save</button>
           {followUp.at !== null && <button type="button" disabled={saving} onClick={() => saveInPlace('set_follow_up', {}, 'Not saved - this lead is no longer yours to work.')} className="rounded-xl px-3 py-2 font-semibold text-[var(--muted)] hover:bg-[var(--line)]">Clear</button>}
         </div>

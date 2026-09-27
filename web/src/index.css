@@ -189,6 +189,14 @@ button:active {
   button {
     min-width: 44px;
   }
+
+  /* The SDK's avatar (32px) and text-size (36px) buttons grow to 44px above; keep their content
+     centred instead of stuck in the top-left corner. */
+  .platform-controls button {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 :root[data-text='lg'] { font-size: 118.75%; }

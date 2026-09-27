@@ -180,16 +180,16 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
         <select aria-label="Time range" value={range} onChange={(e) => setRange(e.target.value as RangeKey)} className={selectClass}>
           {Object.entries(RANGES).map(([k, r]) => <option key={k} value={k}>{r.label}</option>)}
         </select>
-        <select aria-label="Source" value={sourceId} onChange={(e) => setSourceId(e.target.value)} className={`${selectClass} max-w-56`}>
+        <select aria-label="Source" value={sourceId} onChange={(e) => setSourceId(e.target.value)} className={`${selectClass} sm:max-w-56`}>
           <option value="">All sources</option>
           <option value="none">No source</option>
           {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <select aria-label="List" value={listId} onChange={(e) => setListId(e.target.value)} className={`${selectClass} max-w-56`}>
+        <select aria-label="List" value={listId} onChange={(e) => setListId(e.target.value)} className={`${selectClass} sm:max-w-56`}>
           <option value="">All lists</option>
           {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
@@ -253,18 +253,18 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
         ) : (
           <ol className="mt-2 divide-y divide-[var(--line)]">
             {feed.map((e) => (
-              <li key={e.k + e.at} className="flex gap-3 py-2 text-sm">
+              <li key={e.k + e.at} className="flex flex-col gap-0.5 py-2 text-sm sm:flex-row sm:gap-3">
                 <time
                   dateTime={new Date(e.at).toISOString()}
                   title={e.at_known === 0 ? 'The time of this one was never recorded — shown at the lead\'s creation' : undefined}
-                  className="w-28 shrink-0 text-xs tabular-nums text-[var(--muted)]"
+                  className="shrink-0 text-xs tabular-nums text-[var(--muted)] sm:w-28"
                 >
                   {new Date(e.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   {e.at_known === 0 && <span className="block not-italic opacity-80">time not recorded</span>}
                 </time>
                 <div className="min-w-0 select-text [overflow-wrap:anywhere]">
                   {e.lead_id ? (
-                    <button type="button" onClick={() => onOpenLead(e.lead_id!)} className={`font-semibold hover:underline ${e.kind === 'flagged' ? 'text-[var(--warning)]' : 'text-[var(--ink)]'}`}>{e.lead_name}</button>
+                    <button type="button" onClick={() => onOpenLead(e.lead_id!)} className={`text-left font-semibold hover:underline ${e.kind === 'flagged' ? 'text-[var(--warning)]' : 'text-[var(--ink)]'}`}>{e.lead_name}</button>
                   ) : (
                     <span className="font-semibold text-[var(--ink)]">{e.source_name}</span>
                   )}

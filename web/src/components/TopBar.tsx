@@ -24,7 +24,8 @@ export function TopBar({ projects, current, platform, onSwitch, onManage, onNew 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--paper)]/85 backdrop-blur">
       <div className="mx-auto flex w-full max-w-7xl items-center gap-2 px-4 py-2.5 lg:px-6">
-        <span className="display-font shrink-0 text-lg font-bold text-[var(--ink)]">Leads</span>
+        {/* On phones the project switcher needs the width; the page heading says where you are. */}
+        <span className="display-font hidden shrink-0 text-lg font-bold text-[var(--ink)] sm:inline">Leads</span>
         <select
           aria-label="Current project"
           value={current}
@@ -51,7 +52,7 @@ export function TopBar({ projects, current, platform, onSwitch, onManage, onNew 
             <span className="sr-only sm:hidden">Manage project</span>
           </button>
         )}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="platform-controls ml-auto flex shrink-0 items-center gap-1">
           {platform.proBadge}
           {platform.textSizeToggle}
           {platform.profileMenu}

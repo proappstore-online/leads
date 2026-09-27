@@ -43,7 +43,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
         {lead.needs_attention ? <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--paper)]">Needs attention</span> : null}
       </div>
       {lead.shared ? <div className="text-xs font-medium text-[var(--accent-deep)]">{sharedVia(lead)}</div> : null}
-      {lead.needs_attention && lead.attention_reason ? <div className={`text-xs font-medium text-[var(--warning)] ${wrapAnywhere}`}>{lead.attention_reason}</div> : null}
+      {lead.needs_attention && lead.attention_reason ? <div title={lead.attention_reason} className={`line-clamp-2 text-xs font-medium text-[var(--warning)] ${wrapAnywhere}`}>{lead.attention_reason}</div> : null}
       <div className="text-xs text-[var(--muted)]">
         {[lead.title, lead.company, lead.location].filter(Boolean).join(' · ')}
         {lead.country
@@ -107,8 +107,8 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
             <li key={lead.id} onClick={() => onOpen(lead)} className={`cursor-pointer rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm ${lead.needs_attention ? attentionRow : ''}`}>
               {summary(lead)}
               {(lead.email || lead.phone) && (
-                <div className="mt-2 flex flex-col gap-1 text-sm" onClick={(e) => e.stopPropagation()}>
-                  {lead.email && <a href={`mailto:${lead.email}`} className={`break-all py-0.5 ${linkClass}`}>{lead.email}</a>}
+                <div className="mt-2 flex min-w-0 flex-col gap-1 text-sm" onClick={(e) => e.stopPropagation()}>
+                  {lead.email && <a href={`mailto:${lead.email}`} title={lead.email} className={`truncate py-0.5 ${linkClass}`}>{lead.email}</a>}
                   {lead.phone && <a href={`tel:${lead.phone}`} className={`py-0.5 ${linkClass}`}>{lead.phone}</a>}
                 </div>
               )}
@@ -116,7 +116,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
                 <span className="rounded-full bg-[var(--line)] px-2 py-0.5 font-semibold capitalize text-[var(--ink)]">{lead.status}</span>
                 {lead.fit && <span className={`font-semibold capitalize ${fitClass(lead)}`}>{lead.fit} fit</span>}
-                {lead.next_action_at && <span className={wrapAnywhere}>follow up {followUp(lead)}{lead.next_action ? ` · ${lead.next_action}` : ''}</span>}
+                {lead.next_action_at && <span title={lead.next_action ?? undefined} className={`line-clamp-2 ${wrapAnywhere}`}>follow up {followUp(lead)}{lead.next_action ? ` · ${lead.next_action}` : ''}</span>}
                 <span>last contact {date(lead.last_message_at)}</span>
                 {lead.last_reply_at && <span>reply {date(lead.last_reply_at)}</span>}
                 {assignee(lead) && <span>→ {assignee(lead)}</span>}

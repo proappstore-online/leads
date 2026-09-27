@@ -16,6 +16,7 @@ import { SourceDetails } from './components/SourceDetails'
 import { SourceForm } from './components/SourceForm'
 import { SourcesTable } from './components/SourcesTable'
 import { StatsPage } from './components/StatsPage'
+import { ProfilePage } from './components/ProfilePage'
 import { SignIn } from './components/SignIn'
 import { TopBar } from './components/TopBar'
 import { EmptyState, LoadingState, RetryState } from './components/AsyncState'
@@ -48,6 +49,9 @@ export default function App() {
   /** Bumped when projects or their members change, so Home reloads. */
   const [projectsVersion, setProjectsVersion] = useState(0)
   const [error, setError] = useState('')
+  /** The name collaborators see (#36); null until loaded or when none is stored yet. */
+  const [storedName, setStoredName] = useState<string | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
 
   const loadProjects = useCallback(async () => {
     setError('')
@@ -56,7 +60,9 @@ export default function App() {
       // 0010 leaves the deployed composite-key tables intact. Copy this caller's
       // rows before any action reads the stable-ID replacements.
       await x('backfill_legacy_join_tables')
-      setProjects(await q<Project>('list_projects'))
+      const [rows, name] = await Promise.all([q<Project>('list_projects'), q<{ name: string }>('get_display_name')])
+      setProjects(rows)
+      setStoredName(name[0]?.name ?? null)
       setLoaded(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -103,6 +109,8 @@ export default function App() {
   if (!user) return <SignIn />
 
   const changed = () => setProjectsVersion((v) => v + 1)
+  /** New projects and joins carry the name set on the profile, else the account name. */
+  const displayName = storedName ?? user.name
   const closeJoin = () => {
     localStorage.removeItem(JOIN_KEY)
     setJoinCode(null)
@@ -113,6 +121,7 @@ export default function App() {
       app={app}
       appName="Leads"
       menuItems={[
+        { label: 'Profile', onClick: () => setShowProfile(true) },
         { label: 'Recover session…', onClick: () => { location.assign('/.pas/auth/recover') } },
         { label: 'Delete my data…', onClick: deleteMyData },
       ]}
@@ -129,21 +138,34 @@ export default function App() {
     >
       {!loaded && !error && <div className="mx-auto w-full max-w-7xl px-4 pt-5 lg:px-6"><LoadingState label="Loading your projects…" /></div>}
       {!loaded && error && <div className="mx-auto w-full max-w-7xl px-4 pt-5 lg:px-6"><RetryState error={error} onRetry={loadProjects} onSignOut={signOut} /></div>}
-      {loaded && project !== null && (
+      {showProfile && (
+        <ProfilePage
+          key={projectsVersion}
+          user={user}
+          displayName={displayName}
+          projects={projects}
+          onNameSaved={(name) => { setStoredName(name); loadProjects() }}
+          onBack={() => setShowProfile(false)}
+          onDeleteData={deleteMyData}
+          onSignOut={signOut}
+        />
+      )}
+      {/* Hidden rather than unmounted while the profile is open, so filters survive the visit. */}
+      {loaded && project !== null && <div className={showProfile ? 'hidden' : 'contents'}>
         <Home
           key={project}
           userId={user?.id ?? ''}
-          userName={user?.name ?? ''}
+          userName={displayName}
           projects={projects}
           currentProject={project}
           projectsVersion={projectsVersion}
           onProjectsChanged={changed}
         />
-      )}
+      </div>}
       {editingProject && (
         <ProjectForm
           project={editingProject === 'new' ? null : editingProject}
-          ownerName={user?.name ?? ''}
+          ownerName={displayName}
           onClose={() => setEditingProject(null)}
           onSaved={(id) => { setEditingProject(null); switchProject(id); loadProjects() }}
           onDeleted={() => { setEditingProject(null); switchProject(ALL_PROJECTS); loadProjects() }}
@@ -153,7 +175,7 @@ export default function App() {
       {joinCode && (
         <JoinProject
           code={joinCode}
-          userName={user?.name ?? ''}
+          userName={displayName}
           onClose={closeJoin}
           onJoined={(joined) => { closeJoin(); switchProject(joined); loadProjects() }}
         />
@@ -221,6 +243,11 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   /** Table or Kanban board — the same leads either way; remembered on this device. */
   const [layout, setLayout] = useState<'table' | 'board'>(() => (localStorage.getItem(LAYOUT_KEY) === 'board' ? 'board' : 'table'))
   const request = useRef(0)
+  /** Phones show the filters behind a toggle; wider screens always show them. */
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
+  /** Which ends of the phone nav strip have more to scroll to - they fade as a hint. */
+  const [navMore, setNavMore] = useState({ start: false, end: false })
 
   const loadLists = useCallback(async () => {
     setListsLoading(true)
@@ -373,10 +400,13 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   const people = new Map(members.map((m) => [m.user_id, m.display_name ?? 'Unnamed member']))
   people.set(userId, 'Me')
   const assignees = [...new Map(members.map((m) => [m.user_id, m])).values()]
-  const chip = (active: boolean) =>
-    `flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold ${active ? 'bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'text-[var(--ink)] hover:bg-[var(--line)]'}`
+  /** Props for a nav chip; aria-current also lets the phone strip scroll the active one into view. */
+  const chip = (active: boolean, extra = '') => ({
+    'aria-current': active ? 'page' as const : undefined,
+    className: `flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold ${extra} ${active ? 'bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'text-[var(--ink)] hover:bg-[var(--line)]'}`,
+  })
   const listChip = (list: LeadList) => (
-    <button key={list.id} type="button" onClick={() => browse({ listId: list.id })} title={list.purpose ?? undefined} className={chip(view === 'leads' && listId === list.id)}>
+    <button key={list.id} type="button" onClick={() => browse({ listId: list.id })} title={list.purpose ?? undefined} {...chip(view === 'leads' && listId === list.id, 'max-lg:order-1')}>
       <span className="truncate">{list.name}</span>
       <span className="text-xs font-medium text-[var(--muted)]">{list.lead_count}</span>
     </button>
@@ -387,36 +417,57 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
     document.title = `${page} — ProAppStore`
   }, [view, attentionOnly, followUpsOnly, assignedOnly, current?.name])
 
+  const updateNavMore = useCallback(() => {
+    const nav = navRef.current
+    if (!nav) return
+    setNavMore({ start: nav.scrollLeft > 1, end: nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1 })
+  }, [])
+  useEffect(() => {
+    updateNavMore()
+    window.addEventListener('resize', updateNavMore)
+    return () => window.removeEventListener('resize', updateNavMore)
+  }, [updateNavMore, lists.length, listsLoading])
+  // Keep the chip for the current view in sight on the phone strip.
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [view, listId, attentionOnly, followUpsOnly, assignedOnly])
+  const fade = (side: 'left' | 'right') => `linear-gradient(to ${side}, black calc(100% - 2rem), transparent)`
+  const navMask = navMore.start && navMore.end
+    ? 'linear-gradient(to right, transparent, black 2rem, black calc(100% - 2rem), transparent)'
+    : navMore.end ? fade('right') : navMore.start ? fade('left') : undefined
+  const activeFilters = [status, assignedTo, fit, country, sourceId, followUp, tag].filter(Boolean).length
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
-      <nav aria-label="Lead lists" className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
+      {/* Phones: one strip that scrolls sideways - views first, then lists; the faded edge shows there is more. */}
+      <nav ref={navRef} onScroll={updateNavMore} aria-label="Lead lists" style={{ maskImage: navMask, WebkitMaskImage: navMask }} className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
         {listsLoading && <span role="status" className="shrink-0 px-3 py-2 text-sm text-[var(--muted)]">Loading lists…</span>}
         {listsError && <div className="min-w-72 lg:min-w-0"><RetryState error={listsError} onRetry={loadLists} /></div>}
-        <button type="button" onClick={() => { browse({}); setSourceId('') }} className={chip(view === 'leads' && listId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
+        <button type="button" onClick={() => { browse({}); setSourceId('') }} {...chip(view === 'leads' && listId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
           <span>All leads</span>
           <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
         </button>
-        <button type="button" onClick={() => browse({ attention: true })} className={chip(view === 'leads' && attentionOnly)}>
+        <button type="button" onClick={() => browse({ attention: true })} {...chip(view === 'leads' && attentionOnly)}>
           <span className={attentionCount > 0 ? 'text-[var(--warning)]' : undefined}>Needs attention</span>
           <span className={`rounded-full px-2 text-xs font-bold ${attentionCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{attentionCount}</span>
         </button>
-        <button type="button" onClick={() => browse({ followUps: true })} className={chip(view === 'leads' && followUpsOnly)}>
+        <button type="button" onClick={() => browse({ followUps: true })} {...chip(view === 'leads' && followUpsOnly)}>
           <span className={followUpCount > 0 ? 'text-[var(--warning)]' : undefined}>Follow-ups due</span>
           <span className={`rounded-full px-2 text-xs font-bold ${followUpCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{followUpCount}</span>
         </button>
-        <button type="button" onClick={() => browse({ assigned: true })} className={chip(view === 'leads' && assignedOnly)}>
+        <button type="button" onClick={() => browse({ assigned: true })} {...chip(view === 'leads' && assignedOnly)}>
           <span>Assigned to me</span>
           <span className="text-xs font-medium text-[var(--muted)]">{assignedCount}</span>
         </button>
         {lists.filter((l) => l.project_id).map((l) => listChip(l))}
         {looseLists.length > 0 && <div className="hidden px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] lg:block" title="Lists from before projects - open one and choose its project">Not in a project</div>}
         {looseLists.map((l) => listChip(l))}
-        <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)]">+ New list</button>
+        <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)] max-lg:order-1">+ New list</button>
         <div className="hidden border-t border-[var(--line)] lg:my-2 lg:block" />
-        <button type="button" onClick={() => setView('stats')} className={chip(view === 'stats')}>
+        <button type="button" onClick={() => setView('stats')} {...chip(view === 'stats')}>
           <span>Stats</span>
         </button>
-        <button type="button" onClick={() => setView('sources')} className={chip(view === 'sources')}>
+        <button type="button" onClick={() => setView('sources')} {...chip(view === 'sources')}>
           <span>Sources</span>
           <span className="text-xs font-medium text-[var(--muted)]">{sources.length}</span>
         </button>
@@ -464,7 +515,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             {followUpsOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Open leads whose follow-up is due by tonight, soonest first. Filter by Follow-up: none set to find leads going cold.</p>}
             {assignedOnly && <p className="mt-0.5 text-sm text-[var(--muted)]">Your own leads assigned to you, and leads shared with you through projects you joined.</p>}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             {current && (
               <button type="button" onClick={() => setEditingList(current)} className="rounded-xl border border-[var(--line-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">Edit list</button>
             )}
@@ -473,7 +524,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
                 <button key={l} type="button" aria-pressed={layout === l} onClick={() => switchLayout(l)} className={`rounded-[10px] px-3 py-1.5 text-sm font-semibold capitalize ${layout === l ? 'bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}>{l}</button>
               ))}
             </div>
-            <button type="button" onClick={() => setEditingLead('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)]">Add lead</button>
+            <button type="button" onClick={() => setEditingLead('new')} className="ml-auto rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--paper)] sm:ml-0">Add lead</button>
           </div>
         </div>
 
@@ -484,8 +535,19 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, company, title, email, phone, source"
-            className="w-full min-w-0 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] sm:w-auto sm:flex-1"
+            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
           />
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="lead-filters"
+            onClick={() => setFiltersOpen((o) => !o)}
+            className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold sm:hidden ${activeFilters ? 'border-[var(--accent)] text-[var(--accent-deep)]' : 'border-[var(--line)] text-[var(--ink)]'}`}
+          >
+            Filters{activeFilters ? ` (${activeFilters})` : ''}
+          </button>
+          {/* Phones: behind the Filters toggle. Wider screens: always shown, inline with the search. */}
+          <div id="lead-filters" className={`${filtersOpen ? 'flex' : 'hidden'} w-full flex-wrap gap-2 sm:contents`}>
           <select
             aria-label="Filter by status"
             value={status}
@@ -551,6 +613,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
             </select>
           )}
           </>}
+          </div>
         </div>
 
         <div className="mt-4">

@@ -55,6 +55,10 @@ Platform conventions: https://proappstore.online/skills.md
   single-use invite codes (`project_invites`, link `?join=<code>`, 7 days). `leads.assigned_to_user_id`
   is the owner or a member of a project that one of the lead's lists belongs to (`assign_lead`
   checks it; actions that remove that path unassign).
+- The name collaborators see is `projects.owner_name` / `project_memberships.display_name`, copied
+  from the account at create/join. The Profile page (`components/ProfilePage.tsx`, opened from the
+  account menu) sets both through `update_display_name`, and `get_display_name` returns it for later
+  creates and joins. The platform account itself (name, avatar) is read-only - there is no users table.
 
 The app works in one project at a time: the top-bar switcher (`App.tsx`, remembered under
 `leads.project`) sets it, and every query passes it as `project_id` - `list_lists`, `count_leads`,
