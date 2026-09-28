@@ -32,3 +32,33 @@ export const projectOf = (list: { project_id: string | null }) => list.project_i
 
 /** The switcher value that means "do not narrow to one project" — every project at once. */
 export const ALL_PROJECTS = 'all'
+
+/** What the filter bar (`LeadFilters`) is set to - shared by the leads page and the stats popup (#37). '' = any. */
+export interface LeadFilter {
+  search: string
+  status: string
+  /** '' = anyone, 'none' = nobody, 'me', otherwise a member's user id. */
+  assignedTo: string
+  /** '' = any, 'none' = not rated, otherwise a fit. */
+  fit: string
+  /** '' = any, 'none' = not confirmed yet, otherwise an ISO code. */
+  country: string
+  /** '' = any source, 'none' = leads without one, otherwise a source id. */
+  sourceId: string
+  /** '' = any, 'due', 'scheduled', 'none' = open lead with nothing scheduled. */
+  followUp: string
+  tag: string
+}
+
+export const NO_FILTER: LeadFilter = { search: '', status: '', assignedTo: '', fit: '', country: '', sourceId: '', followUp: '', tag: '' }
+
+/** The list_leads params for a filter bar state. */
+export function filterParams(f: LeadFilter) {
+  return {
+    q: f.search.trim() || null, status: f.status || null, assigned_to: f.assignedTo || null, fit: f.fit || null,
+    country: f.country || null, source_id: f.sourceId || null, tag: f.tag || null, follow_up: f.followUp || null,
+  }
+}
+
+/** How many of the dropdowns are set (the search box is not counted). */
+export const activeFilterCount = (f: LeadFilter) => [f.status, f.assignedTo, f.fit, f.country, f.sourceId, f.followUp, f.tag].filter(Boolean).length

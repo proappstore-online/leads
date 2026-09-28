@@ -15,16 +15,27 @@ function barPath(x: number, y: number, w: number, h: number): string {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`
 }
 
-/** Grouped bar chart over time buckets, with hover tooltip, legend (2+ series) and a table view. */
-export function BarChart({ title, labels, series, current, height = 170 }: {
+/**
+ * Grouped bar chart over time buckets, with hover tooltip, legend (2+ series) and a table view.
+ * With `onSelect` each period is also a button (#37) - one tab stop for the chart, arrow keys move
+ * between periods - and so is each count in the table view, the full-size target on a phone.
+ */
+export function BarChart({ title, labels, series, current, height = 170, onSelect, unit = ['lead', 'leads'] }: {
   title: string
   labels: string[]
   series: Series[]
   /** Index of the bucket that contains now (today / this week / this month) - shaded and labelled. */
   current?: number
   height?: number
+  /** Open what is behind one period's value; gets the control that asked, for focus to return to. */
+  onSelect?: (i: number, opener: HTMLElement) => void
+  /** What the values count, singular and plural, for the controls' names. */
+  unit?: [string, string]
 }) {
   const [hover, setHover] = useState<number | null>(null)
+  /** The period button that holds the chart's single tab stop. */
+  const [active, setActive] = useState(current ?? 0)
+  const bars = useRef<(HTMLButtonElement | null)[]>([])
   // Drawn at the container's real width, so labels keep their size on a phone instead of shrinking with the chart.
   const box = useRef<HTMLDivElement>(null)
   const [W, setW] = useState(600)
@@ -50,6 +61,19 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
   // The current bucket's label always shows; drop a regular label that would crowd it.
   const showLabel = (i: number) => i === current || (i % every === 0 && (current === undefined || Math.abs(current - i) >= every))
   const totals = series.map((s) => s.values.reduce((a, b) => a + b, 0))
+  const valueName = (i: number) => `${title}, ${labels[i]}: ${series.map((s) => {
+    const v = s.values[i] ?? 0
+    return `${series.length > 1 ? `${s.name} ` : ''}${v} ${v === 1 ? unit[0] : unit[1]}`
+  }).join(', ')}`
+  const pct = (part: number, whole: number) => `${(part / whole) * 100}%`
+  function step(e: React.KeyboardEvent, i: number) {
+    const next = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: n - 1 }[e.key]
+    if (next === undefined) return
+    e.preventDefault()
+    const to = Math.max(0, Math.min(n - 1, next))
+    setActive(to)
+    bars.current[to]?.focus()
+  }
 
   return (
     <figure className="rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4">
@@ -123,6 +147,34 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
             ))}
           </div>
         )}
+        {onSelect && (
+          <div
+            role="group"
+            aria-label={`${title} by period - arrow keys move, Enter shows the ${unit[1]}`}
+            className="absolute"
+            style={{ left: pct(PAD.left, W), width: pct(plotW, W), top: pct(PAD.top, height), height: pct(plotH, height) }}
+            onPointerLeave={() => setHover(null)}
+          >
+            {labels.map((_, i) => (
+              <button
+                key={i}
+                ref={(el) => { bars.current[i] = el }}
+                type="button"
+                data-chart-bar=""
+                tabIndex={i === active ? 0 : -1}
+                aria-label={valueName(i)}
+                onFocus={() => { setActive(i); setHover(i) }}
+                onBlur={() => setHover(null)}
+                onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHover(i) }}
+                onKeyDown={(e) => step(e, i)}
+                onClick={(e) => onSelect(i, e.currentTarget)}
+                // Narrower than a fingertip on a phone; the table view below has a 44px button for each value.
+                className="absolute top-0 h-full min-h-0 min-w-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--accent)]"
+                style={{ left: pct(i, n), width: pct(1, n) }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <details className="mt-2 text-xs text-[var(--muted)]">
@@ -135,7 +187,13 @@ export function BarChart({ title, labels, series, current, height = 170 }: {
             {labels.map((label, i) => (
               <tr key={i} className={`border-t border-[var(--line)] ${i === current ? 'font-semibold text-[var(--ink)]' : ''}`}>
                 <td className="py-1">{label}</td>
-                {series.map((s) => <td key={s.name} className="py-1 text-right tabular-nums text-[var(--ink)]">{s.values[i] ?? 0}</td>)}
+                {series.map((s) => (
+                  <td key={s.name} className="py-1 text-right tabular-nums text-[var(--ink)]">
+                    {onSelect
+                      ? <button type="button" aria-label={valueName(i)} onClick={(e) => onSelect(i, e.currentTarget)} className="rounded-md px-2 font-semibold text-[var(--accent-deep)] underline-offset-2 hover:underline">{s.values[i] ?? 0}</button>
+                      : s.values[i] ?? 0}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

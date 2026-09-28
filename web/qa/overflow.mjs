@@ -73,6 +73,9 @@ async function check(page, where, width) {
     }
     const smallTargets = [...document.querySelectorAll('button, select, textarea, input:not([type=checkbox]):not([type=radio]):not([type=hidden])')]
       .filter((el) => el.getClientRects().length > 0 && !el.hasAttribute('disabled'))
+      // A chart's per-period buttons (#37) are as narrow as its columns. Each has a full-size equivalent
+      // with the same name in the chart's table view (WCAG 2.5.8 "equivalent"), asserted on the Stats page.
+      .filter((el) => !el.hasAttribute('data-chart-bar'))
       .map((el) => {
         const box = el.getBoundingClientRect()
         return { label: el.getAttribute('aria-label') || el.textContent?.trim() || el.tagName.toLowerCase(), width: Math.round(box.width), height: Math.round(box.height) }
@@ -137,6 +140,15 @@ async function run(browser, width) {
 
   await nav.getByRole('button', { name: 'Stats' }).click()
   await check(page, 'stats', width)
+  // Every narrow chart button has a same-named, full-size button in the table view (#37).
+  for (const details of await page.locator('figure details').all()) await details.locator('summary').click()
+  const equivalents = await page.evaluate(() => [...document.querySelectorAll('[data-chart-bar]')].map((bar) => {
+    const twin = [...document.querySelectorAll('figure details button')].find((b) => b.getAttribute('aria-label') === bar.getAttribute('aria-label'))
+    const box = twin?.getBoundingClientRect()
+    return Boolean(box && box.width >= 44 && box.height >= 44)
+  }))
+  ok(equivalents.length > 0 && equivalents.every(Boolean), `${width}px stats — each of the ${equivalents.length} chart buttons has a 44px equivalent in the table view`)
+  await check(page, 'stats tables', width)
 
   await nav.getByRole('button', { name: /^All leads/ }).click()
   await page.waitForTimeout(120)

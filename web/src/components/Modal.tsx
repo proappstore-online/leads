@@ -40,7 +40,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') open.at(-1)?.()
 })
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; /** Room for a lead table (#37). */ wide?: boolean }) {
   const onCloseRef = useRef(onClose)
   const dialogRef = useRef<HTMLDivElement>(null)
   const openerRef = useRef<HTMLElement | null>(null)
@@ -92,7 +92,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         tabIndex={-1}
         onKeyDown={trapTab}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-t-2xl border border-[var(--line)] bg-[var(--paper)] p-5 shadow-[var(--shadow-soft)] sm:rounded-2xl sm:p-6"
+        className={`max-h-[92dvh] w-full ${wide ? 'max-w-6xl' : 'max-w-2xl'} overflow-y-auto overscroll-contain rounded-t-2xl border border-[var(--line)] bg-[var(--paper)] p-5 shadow-[var(--shadow-soft)] sm:rounded-2xl sm:p-6`}
       >
         <div className="flex items-center justify-between gap-3">
           <h2 className="display-font line-clamp-2 min-w-0 break-words text-lg font-bold text-[var(--ink)] sm:text-xl">{title}</h2>

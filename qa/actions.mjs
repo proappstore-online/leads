@@ -390,6 +390,74 @@ ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code 
   ok(call('get_display_name', 'nobody-yet').length === 0, 'a user with no projects has no stored name')
 }
 
+// #37: every stats value the Stats page lets you open is exactly the number of rows list_leads
+// returns for the same filter - per bucket, for the whole-range tiles and for the pipeline, with and
+// without the page's source / list / project narrowing.
+{
+  const U = 'stats-drill'
+  const d = 864e5
+  const t0 = Date.UTC(2026, 0, 10)
+  const PJ = randomUUID(), LI = randomUUID(), SRC = randomUUID()
+  call('create_project', U, { id: PJ, name: 'Drill' })
+  call('create_list', U, { id: LI, name: 'Drill list', project_id: PJ })
+  call('create_source', U, { id: SRC, name: 'Drill source', kind: 'Event' })
+  // [created day, status, fit, from SRC, in LI, flagged day, inbound message days, outbound message days]
+  const seed = [
+    [0, 'new', null, true, true, null, [], []],
+    [0, 'contacted', 'high', false, true, 1, [], [0]],
+    [1, 'replied', 'med', true, false, null, [1, 2], [1]],
+    [2, 'replied', 'high', true, true, 2, [2], []],
+    [2, 'won', 'low', false, false, null, [0, 3], [0]],
+    [3, 'lost', null, true, true, 3, [], [3]],
+    [-5, 'qualified', 'med', false, true, null, [3], []], // before the range, replied inside it
+  ]
+  for (const [i, [created, status, fit, fromSrc, inList, flagged, ins, outs]] of seed.entries()) {
+    const id = `drill-${i}`
+    call('create_lead', U, { id, name: `Drill ${i}`, country: 'AU', status, fit, source_id: fromSrc ? SRC : null })
+    if (inList) call('add_lead_to_list', U, { lead_id: id, list_id: LI, project_id: PJ })
+    db.prepare('UPDATE leads SET created_at = ?, needs_attention = ?, attention_at = ? WHERE id = ?')
+      .run(t0 + created * d + 3600e3, flagged === null ? 0 : 1, flagged === null ? null : t0 + flagged * d + 7200e3, id)
+    for (const [dir, days] of [['in', ins], ['out', outs]]) {
+      for (const day of days) call('add_message', U, { id: randomUUID(), lead_id: id, platform: 'Email', direction: dir, body: 'x', occurred_at: t0 + day * d + 60e3 })
+    }
+  }
+  const pairs = [0, 1, 2, 3].map((k) => [t0 + k * d, t0 + (k + 1) * d])
+  const whole = [[pairs[0][0], pairs[3][1]]]
+  const rows = (params) => call('list_leads', U, { limit: 500, ...params }).length
+  for (const [scope, filters] of [
+    ['everything', {}],
+    ['one source', { source_id: SRC }],
+    ['no source', { source_id: 'none' }],
+    ['one list', { list_id: LI, project_id: PJ }],
+    ['one project', { project_id: PJ }],
+  ]) {
+    const buckets = call('stats_timeline', U, { buckets: JSON.stringify(pairs), ...filters })
+    const tiles = call('stats_timeline', U, { buckets: JSON.stringify(whole), ...filters })[0]
+    const pipe = call('stats_pipeline', U, filters)[0]
+    const checks = []
+    pairs.forEach(([from, before], k) => {
+      checks.push([`leads added, day ${k}`, buckets[k].leads_added, rows({ ...filters, created_from: from, created_before: before })])
+      checks.push([`leads who replied, day ${k}`, buckets[k].leads_replied, rows({ ...filters, replied_from: from, replied_before: before })])
+    })
+    const [from, before] = whole[0]
+    checks.push(['leads added tile', tiles.leads_added, rows({ ...filters, created_from: from, created_before: before })])
+    checks.push(['leads who replied tile', tiles.leads_replied, rows({ ...filters, replied_from: from, replied_before: before })])
+    checks.push(['flags raised tile', tiles.flagged, rows({ ...filters, flagged_from: from, flagged_before: before })])
+    checks.push(['pipeline total', pipe.total, rows(filters)])
+    for (const s of ['new', 'contacted', 'replied', 'qualified', 'won', 'lost']) checks.push([`pipeline ${s}`, pipe[`status_${s}`], rows({ ...filters, status: s })])
+    for (const f of ['high', 'med', 'low']) checks.push([`pipeline ${f} fit`, pipe[`fit_${f}`], rows({ ...filters, fit: f })])
+    checks.push(['pipeline not rated', pipe.fit_none, rows({ ...filters, fit: 'none' })])
+    checks.push(['pipeline needs attention', pipe.needs_attention, rows({ ...filters, needs_attention: true })])
+    checks.push(['pipeline with a conversation', pipe.with_conversation, rows({ ...filters, has_messages: true })])
+    checks.push(['pipeline replied', pipe.replied, rows({ ...filters, replied_from: 0 })])
+    const wrong = checks.filter(([, stat, listed]) => stat !== listed)
+    ok(wrong.length === 0, `stats values match their list_leads rows - ${scope} (${checks.length} values${wrong.length ? `; ${wrong.map(([w, a, b]) => `${w}: ${a} vs ${b}`).join('; ')}` : ''})`)
+    ok(checks.some(([, stat]) => stat > 0), `the ${scope} fixture has non-zero values to compare`)
+  }
+  ok(rows({ replied_from: pairs[1][0], replied_before: pairs[1][1] }) === 1 && rows({ created_from: pairs[0][0], created_before: pairs[0][1] }) === 2, 'the drill-down filters pick the expected leads')
+  ok(call('list_leads', 'someone-else', { created_from: 0, replied_from: 0, has_messages: true, fit: 'none', limit: 500 }).length === 0, 'the drill-down filters never reach another user\'s leads')
+}
+
 // PAS-OPS-017 (platform#186): delete_my_data leaves NO row for that user in any table, and
 // nobody else's rows change except the two cross-user links it must sever (assignment, project
 // attachment). Runs AFTER the sweep so the owner's fixture is complete and the invariant above

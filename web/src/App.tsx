@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { ProShell } from '@proappstore/sdk'
 import { useProAuth } from '@proappstore/sdk/hooks'
 import { app } from './lib/app'
-import { COUNTRY_OPTIONS, countryName } from './lib/countries'
 import { q, x } from './lib/actions'
-import { ALL_PROJECTS, endOfToday, projectOf } from './lib/lead'
-import { FITS, STATUSES, type Lead, type LeadList, type Project, type ProjectMember, type Sort, type SortKey, type Source, type SourceSort } from './types'
+import { activeFilterCount, ALL_PROJECTS, endOfToday, filterParams, NO_FILTER, projectOf, type LeadFilter } from './lib/lead'
+import { type Lead, type LeadList, type Project, type ProjectMember, type Sort, type SortKey, type Source, type SourceSort } from './types'
 import { JoinProject } from './components/JoinProject'
 import { LeadBoard } from './components/LeadBoard'
+import { LeadFilters } from './components/LeadFilters'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
@@ -206,19 +206,12 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   /** Open leads whose follow-up is due by tonight, soonest first. */
   const [followUpsOnly, setFollowUpsOnly] = useState(false)
   const [tags, setTags] = useState<{ tag: string; leads: number }[]>([])
-  const [tag, setTag] = useState('')
-  /** '' = any, 'due', 'scheduled', 'none' = open lead with nothing scheduled. */
-  const [followUp, setFollowUp] = useState('')
   /** Leads assigned to you — your own and those shared with you. */
   const [assignedOnly, setAssignedOnly] = useState(false)
-  /** '' = anyone, 'none' = nobody, 'me', otherwise a member's user id. */
-  const [assignedTo, setAssignedTo] = useState('')
   const [view, setView] = useState<'leads' | 'sources' | 'stats'>('leads')
   const [sources, setSources] = useState<Source[]>([])
   const [noSource, setNoSource] = useState(0)
   const [sourceSort, setSourceSort] = useState<SourceSort>('leads')
-  /** '' = any source, 'none' = leads without one, otherwise a source id. */
-  const [sourceId, setSourceId] = useState('')
   const [editingSource, setEditingSource] = useState<Source | 'new' | null>(null)
   const [viewingSourceId, setViewingSourceId] = useState<string | null>(null)
   /** Bumped on every refresh so an open source panel reloads after edits. */
@@ -232,19 +225,14 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   const [sourcesError, setSourcesError] = useState('')
   const [leadsError, setLeadsError] = useState('')
   const [listId, setListId] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
-  const [fit, setFit] = useState('')
-  /** '' = any, 'none' = not confirmed yet, otherwise an ISO code. */
-  const [country, setCountry] = useState('')
+  /** The search box and dropdowns of the filter bar. */
+  const [filter, setFilter] = useState<LeadFilter>(NO_FILTER)
   const [sort, setSort] = useState<Sort>({ key: 'name', dir: 'asc' })
   const [editingLead, setEditingLead] = useState<Lead | 'new' | null>(null)
   const [editingList, setEditingList] = useState<LeadList | 'new' | null>(null)
   /** Table or Kanban board — the same leads either way; remembered on this device. */
   const [layout, setLayout] = useState<'table' | 'board'>(() => (localStorage.getItem(LAYOUT_KEY) === 'board' ? 'board' : 'table'))
   const request = useRef(0)
-  /** Phones show the filters behind a toggle; wider screens always show them. */
-  const [filtersOpen, setFiltersOpen] = useState(false)
   const navRef = useRef<HTMLElement>(null)
   /** Which ends of the phone nav strip have more to scroll to - they fade as a hint. */
   const [navMore, setNavMore] = useState({ start: false, end: false })
@@ -297,11 +285,10 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
     setLeadsError('')
     try {
       const rows = assignedOnly
-        ? await q<Lead>('list_assigned_leads', { project_id: scope, status: status || null, q: search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
+        ? await q<Lead>('list_assigned_leads', { project_id: scope, status: filter.status || null, q: filter.search.trim() || null, sort: sort.key, dir: sort.dir, limit: PAGE, offset })
         : await q<Lead>('list_leads', {
-          list_id: listId, project_id: selectedListProject ?? scope, assigned_to: assignedTo || null, status: status || null, fit: fit || null, country: country || null,
-          needs_attention: attentionOnly || null, source_id: sourceId || null, tag: tag || null, q: search.trim() || null,
-          follow_up: followUpsOnly ? 'due' : followUp || null, due_before: endOfToday(),
+          list_id: listId, project_id: selectedListProject ?? scope, ...filterParams(filter), needs_attention: attentionOnly || null,
+          follow_up: followUpsOnly ? 'due' : filter.followUp || null, due_before: endOfToday(),
           sort: sort.key, dir: sort.dir, limit: PAGE, offset,
         })
       if (id !== request.current) return // a newer filter superseded this request
@@ -312,7 +299,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
     } finally {
       if (id === request.current) setLoading(false)
     }
-  }, [scope, projectsVersion, assignedOnly, followUpsOnly, listId, selectedListProject, assignedTo, status, fit, country, attentionOnly, sourceId, tag, followUp, search, sort])
+  }, [scope, projectsVersion, assignedOnly, followUpsOnly, listId, selectedListProject, filter, attentionOnly, sort])
 
   useEffect(() => { loadLists() }, [loadLists])
   useEffect(() => { loadSources() }, [loadSources])
@@ -355,7 +342,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   function showSourceLeads(id: string) {
     setViewingSourceId(null)
     browse({})
-    setSourceId(id)
+    setFilter((f) => ({ ...f, sourceId: id }))
   }
 
   /**
@@ -435,7 +422,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   const navMask = navMore.start && navMore.end
     ? 'linear-gradient(to right, transparent, black 2rem, black calc(100% - 2rem), transparent)'
     : navMore.end ? fade('right') : navMore.start ? fade('left') : undefined
-  const activeFilters = [status, assignedTo, fit, country, sourceId, followUp, tag].filter(Boolean).length
+  const filtered = Boolean(filter.search.trim()) || activeFilterCount(filter) > 0
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
@@ -443,7 +430,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       <nav ref={navRef} onScroll={updateNavMore} aria-label="Lead lists" style={{ maskImage: navMask, WebkitMaskImage: navMask }} className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
         {listsLoading && <span role="status" className="shrink-0 px-3 py-2 text-sm text-[var(--muted)]">Loading lists…</span>}
         {listsError && <div className="min-w-72 lg:min-w-0"><RetryState error={listsError} onRetry={loadLists} /></div>}
-        <button type="button" onClick={() => { browse({}); setSourceId('') }} {...chip(view === 'leads' && listId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
+        <button type="button" onClick={() => { browse({}); setFilter((f) => ({ ...f, sourceId: '' })) }} {...chip(view === 'leads' && listId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
           <span>All leads</span>
           <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
         </button>
@@ -474,7 +461,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
       </nav>
 
       {view === 'stats' ? (
-        <StatsPage lists={lists} sources={sources} people={people} projectId={scope} version={version} onOpenLead={openLeadById} onAddLead={() => setEditingLead('new')} />
+        <StatsPage lists={lists} projects={projects} sources={sources} assignees={assignees} tags={tags} people={people} projectId={scope} version={version} onOpenLead={openLeadById} onAddLead={() => setEditingLead('new')} />
       ) : view === 'sources' ? (
       <main id="main-content" className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -528,92 +515,8 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <input
-            type="search"
-            aria-label="Search leads"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, company, title, email, phone, source"
-            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-          />
-          <button
-            type="button"
-            aria-expanded={filtersOpen}
-            aria-controls="lead-filters"
-            onClick={() => setFiltersOpen((o) => !o)}
-            className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold sm:hidden ${activeFilters ? 'border-[var(--accent)] text-[var(--accent-deep)]' : 'border-[var(--line)] text-[var(--ink)]'}`}
-          >
-            Filters{activeFilters ? ` (${activeFilters})` : ''}
-          </button>
-          {/* Phones: behind the Filters toggle. Wider screens: always shown, inline with the search. */}
-          <div id="lead-filters" className={`${filtersOpen ? 'flex' : 'hidden'} w-full flex-wrap gap-2 sm:contents`}>
-          <select
-            aria-label="Filter by status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
-          >
-            <option value="">Any status</option>
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {!assignedOnly && <>
-          <select
-            aria-label="Filter by assignee"
-            value={assignedTo}
-            onChange={(e) => setAssignedTo(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
-          >
-            <option value="">Anyone</option>
-            <option value="none">Not assigned</option>
-            <option value="me">Assigned to me</option>
-            {assignees.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name ?? 'Unnamed member'}</option>)}
-          </select>
-          <select
-            aria-label="Filter by fit"
-            value={fit}
-            onChange={(e) => setFit(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm capitalize text-[var(--ink)] outline-none"
-          >
-            <option value="">Any fit</option>
-            {FITS.map((f) => <option key={f} value={f}>{f}</option>)}
-          </select>
-          <select
-            aria-label="Filter by country"
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
-          >
-            <option value="">Any country</option>
-            <option value="none">Country not confirmed</option>
-            {COUNTRY_OPTIONS.map((c) => <option key={c} value={c}>{countryName(c)}</option>)}
-          </select>
-          <select
-            aria-label="Filter by source"
-            value={sourceId}
-            onChange={(e) => setSourceId(e.target.value)}
-            className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-48 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none"
-          >
-            <option value="">Any source</option>
-            <option value="none">No source</option>
-            {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          {!followUpsOnly && (
-            <select aria-label="Filter by follow-up" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
-              <option value="">Any follow-up</option>
-              <option value="due">Follow-up due</option>
-              <option value="scheduled">Follow-up scheduled</option>
-              <option value="none">No follow-up set</option>
-            </select>
-          )}
-          {tags.length > 0 && (
-            <select aria-label="Filter by tag" value={tag} onChange={(e) => setTag(e.target.value)} className="min-w-0 flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:max-w-44 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none">
-              <option value="">Any tag</option>
-              {tags.map((t) => <option key={t.tag} value={t.tag}>#{t.tag} ({t.leads})</option>)}
-            </select>
-          )}
-          </>}
-          </div>
+        <div className="mt-4">
+          <LeadFilters value={filter} onChange={setFilter} sources={sources} assignees={assignees} tags={tags} statusOnly={assignedOnly} hideFollowUp={followUpsOnly} />
         </div>
 
         <div className="mt-4">
@@ -622,8 +525,8 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
               ? <LeadBoard leads={leads} people={people} onOpen={setEditingLead} onMove={moveLead} />
               : <LeadTable leads={leads} lists={lists} projects={projects} people={people} sort={sort} onSort={toggleSort} onOpen={setEditingLead} />
           ) : loading ? <LoadingState label="Loading leads…" /> : (
-            <EmptyState action={!attentionOnly && !followUpsOnly && !assignedOnly && !(search || status || fit || country || sourceId || assignedTo || tag || followUp) ? <button type="button" onClick={() => setEditingLead('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--paper)]">Add lead</button> : undefined}>
-              {attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (search || status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : search || status || fit || country || sourceId || assignedTo || tag || followUp ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : scope ? 'No leads in this project yet. Add one, or switch project in the top bar.' : 'No leads yet. Add your first one.'}
+            <EmptyState action={!attentionOnly && !followUpsOnly && !assignedOnly && !filtered ? <button type="button" onClick={() => setEditingLead('new')} className="rounded-xl bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--paper)]">Add lead</button> : undefined}>
+              {attentionOnly ? 'Nothing needs your attention.' : followUpsOnly ? 'No follow-ups due. Nice.' : assignedOnly ? (filter.search || filter.status ? 'No assigned leads match these filters.' : 'Nothing is assigned to you.') : filtered ? 'No leads match these filters.' : current ? 'No leads in this list yet.' : scope ? 'No leads in this project yet. Add one, or switch project in the top bar.' : 'No leads yet. Add your first one.'}
             </EmptyState>
           )}
           {hasMore && (
@@ -669,7 +572,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
           onDeleted={() => {
             const deleted = editingSource === 'new' ? null : editingSource?.id
             setViewingSourceId(null)
-            setSourceId((s) => (s === deleted ? '' : s)) // don't leave the leads view filtered on a source that no longer exists
+            setFilter((f) => (f.sourceId === deleted ? { ...f, sourceId: '' } : f)) // don't leave the leads view filtered on a source that no longer exists
           }}
         />
       )}

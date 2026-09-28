@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { q } from '../lib/actions'
 import { summariseChanges, type HistoryNames } from '../lib/history'
 import { projectOf } from '../lib/lead'
-import { FITS, STATUSES, type LeadList, type Source } from '../types'
+import { FITS, STATUSES, type LeadList, type Project, type ProjectMember, type Source } from '../types'
 import { BarChart } from './BarChart'
 import { EmptyState, LoadingState, RetryState } from './AsyncState'
+import { StatsLeads, type Drill } from './StatsLeads'
 
 interface Bucket {
   leads_added: number
@@ -83,10 +84,17 @@ function describe(e: Activity, names: HistoryNames): string {
   }
 }
 
-/** Charts and activity: what came in, what agents did, and where the pipeline stands. */
-export function StatsPage({ lists, sources, people, projectId, version, onOpenLead, onAddLead }: {
+/**
+ * Charts and activity: what came in, what agents did, and where the pipeline stands. Every value that
+ * counts leads is a button that opens those leads (#37); message and source counts are not leads.
+ */
+export function StatsPage({ lists, projects, sources, assignees, tags, people, projectId, version, onOpenLead, onAddLead }: {
   lists: LeadList[]
+  projects: Project[]
   sources: Source[]
+  /** For the popup's filter bar, as on the leads page. */
+  assignees: ProjectMember[]
+  tags: { tag: string; leads: number }[]
   /** Names by user id, for a change that reassigned a lead. */
   people: Map<string, string>
   /** The current project, or null for every project — everything here is scoped to it. */
@@ -108,6 +116,8 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
   const [feedLoading, setFeedLoading] = useState(true)
   const [dataError, setDataError] = useState('')
   const [feedError, setFeedError] = useState('')
+  /** The value whose leads are open in the popup. */
+  const [drill, setDrill] = useState<Drill | null>(null)
 
   const { pairs, labels } = useMemo(() => buckets(range), [range])
   const names = useMemo<HistoryNames>(() => ({ people, sources }), [people, sources])
@@ -162,14 +172,33 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
   const totals = current?.totals ?? null
   const col = (key: keyof Bucket) => current?.series.map((b) => b[key]) ?? []
   const selectClass = 'rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none'
-  const tiles: [string, number | undefined][] = [
-    ['Leads added', totals?.leads_added],
+
+  function open(next: Drill, opener: HTMLElement) {
+    opener.focus() // Safari does not focus a clicked button; the popup hands focus back to whatever had it
+    setDrill(next)
+  }
+  // The leads behind a count over [from, before): leads saved, replying or flagged in it.
+  const period = (title: string, what: string, count: number, key: 'created' | 'replied' | 'flagged', [from, before]: [number, number], when: string): Drill => ({
+    title: `${title} · ${when}`,
+    count,
+    constraint: { label: `${what} ${when.toLowerCase() === 'today' ? 'today' : `in ${when}`}`, params: { [`${key}_from`]: from, [`${key}_before`]: before } },
+  })
+  const shownPairs = current?.pairs ?? pairs
+  const whole: [number, number] = [shownPairs[0][0], shownPairs[shownPairs.length - 1][1]]
+  const rangeLabel = RANGES[range].label
+  const tiles: [string, number | undefined, Drill?][] = [
+    ['Leads added', totals?.leads_added, totals ? period('Leads added', 'Added', totals.leads_added, 'created', whole, rangeLabel) : undefined],
     ['Messages sent', totals?.messages_sent],
     ['Messages received', totals?.messages_received],
-    ['Leads who replied', totals?.leads_replied],
-    ['Flags raised', totals?.flagged],
+    ['Leads who replied', totals?.leads_replied, totals ? period('Leads who replied', 'Replied', totals.leads_replied, 'replied', whole, rangeLabel) : undefined],
+    ['Flags raised', totals?.flagged, totals ? period('Flags raised', 'Flagged', totals.flagged, 'flagged', whole, rangeLabel) : undefined],
     ['Sources added', totals?.sources_added],
   ]
+  const valueButton = (count: number, name: string, d: Omit<Drill, 'count'>) => (
+    <button type="button" aria-label={`${name}: ${count} ${count === 1 ? 'lead' : 'leads'} - show them`} onClick={(e) => open({ ...d, count }, e.currentTarget)} className="rounded-md font-semibold tabular-nums text-[var(--accent-deep)] underline-offset-2 hover:underline">
+      {count}
+    </button>
+  )
 
   return (
     <main className="min-w-0 flex-1">
@@ -197,10 +226,17 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
 
       {dataError ? <div className="mt-4"><RetryState error={dataError} onRetry={loadStats} /></div> : dataLoading && !current ? <div className="mt-4"><LoadingState label="Loading statistics…" /></div> : <>
       <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-        {tiles.map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2">
+        {tiles.map(([label, value, d]) => (
+          <div key={label} className={`relative rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 ${d ? 'hover:border-[var(--accent)]' : ''}`}>
             <dt className="text-xs text-[var(--muted)]">{label}</dt>
-            <dd className="text-2xl font-bold tabular-nums text-[var(--ink)]">{value ?? '—'}</dd>
+            <dd className="text-2xl font-bold tabular-nums text-[var(--ink)]">
+              {d && value !== undefined ? (
+                // The whole tile is the target; the button stays the named, focusable control.
+                <button type="button" aria-label={`${label}, ${rangeLabel.toLowerCase()}: ${value} ${value === 1 ? 'lead' : 'leads'} - show them`} onClick={(e) => open(d, e.currentTarget)} className="text-[var(--accent-deep)] after:absolute after:inset-0 after:rounded-xl after:content-['']">
+                  {value}
+                </button>
+              ) : value ?? '—'}
+            </dd>
           </div>
         ))}
       </dl>
@@ -210,7 +246,13 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
       </p>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <BarChart title="Leads added" labels={labels} current={labels.length - 1} series={[{ name: 'Leads added', color: 'var(--series-1)', values: col('leads_added') }]} />
+        <BarChart
+          title="Leads added"
+          labels={labels}
+          current={labels.length - 1}
+          series={[{ name: 'Leads added', color: 'var(--series-1)', values: col('leads_added') }]}
+          onSelect={current ? (i, opener) => open(period('Leads added', 'Added', current.series[i].leads_added, 'created', current.pairs[i], labels[i]), opener) : undefined}
+        />
         <BarChart
           title="Messages"
           labels={labels}
@@ -220,26 +262,34 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
             { name: 'Received', color: 'var(--series-2)', values: col('messages_received') },
           ]}
         />
-        <BarChart title="Leads who replied" labels={labels} current={labels.length - 1} series={[{ name: 'Leads who replied', color: 'var(--series-1)', values: col('leads_replied') }]} />
+        <BarChart
+          title="Leads who replied"
+          labels={labels}
+          current={labels.length - 1}
+          series={[{ name: 'Leads who replied', color: 'var(--series-1)', values: col('leads_replied') }]}
+          onSelect={current ? (i, opener) => open(period('Leads who replied', 'Replied', current.series[i].leads_replied, 'replied', current.pairs[i], labels[i]), opener) : undefined}
+        />
         <BarChart title="Sources added" labels={labels} current={labels.length - 1} series={[{ name: 'Sources added', color: 'var(--series-1)', values: col('sources_added') }]} />
       </div>
 
       {pipeline && (
         <section className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--ink)]">Pipeline now <span className="font-normal text-[var(--muted)]">— {pipeline.total} leads</span></h2>
-          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          <h2 className="text-sm font-semibold text-[var(--ink)]">Pipeline now <span className="font-normal text-[var(--muted)]">— {valueButton(pipeline.total, 'Pipeline, all leads', { title: 'Pipeline · all leads' })} leads</span></h2>
+          <dl className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
             {STATUSES.map((s) => (
-              <div key={s} className="flex gap-1"><dt className="capitalize text-[var(--muted)]">{s}</dt><dd className="font-semibold tabular-nums text-[var(--ink)]">{pipeline[`status_${s}`]}</dd></div>
+              <div key={s} className="flex items-center gap-1"><dt className="capitalize text-[var(--muted)]">{s}</dt><dd>{valueButton(pipeline[`status_${s}`], `Pipeline, ${s}`, { title: `Pipeline · ${s}`, filter: { status: s } })}</dd></div>
             ))}
           </dl>
-          <dl className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          <dl className="mt-1 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
             {FITS.map((f) => (
-              <div key={f} className="flex gap-1"><dt className="capitalize text-[var(--muted)]">{f} fit</dt><dd className="font-semibold tabular-nums text-[var(--ink)]">{pipeline[`fit_${f}`]}</dd></div>
+              <div key={f} className="flex items-center gap-1"><dt className="capitalize text-[var(--muted)]">{f} fit</dt><dd>{valueButton(pipeline[`fit_${f}`], `Pipeline, ${f} fit`, { title: `Pipeline · ${f} fit`, filter: { fit: f } })}</dd></div>
             ))}
-            <div className="flex gap-1"><dt className="text-[var(--muted)]">not rated</dt><dd className="font-semibold tabular-nums text-[var(--ink)]">{pipeline.fit_none}</dd></div>
+            <div className="flex items-center gap-1"><dt className="text-[var(--muted)]">not rated</dt><dd>{valueButton(pipeline.fit_none, 'Pipeline, not rated', { title: 'Pipeline · not rated', filter: { fit: 'none' } })}</dd></div>
           </dl>
           <p className="mt-2 text-xs text-[var(--muted)]">
-            {pipeline.with_conversation} have a recorded conversation · {pipeline.replied} have replied · {pipeline.needs_attention} need attention
+            {valueButton(pipeline.with_conversation, 'Pipeline, with a recorded conversation', { title: 'Pipeline · with a recorded conversation', constraint: { label: 'Has a recorded conversation', params: { has_messages: true } } })} have a recorded conversation
+            {' · '}{valueButton(pipeline.replied, 'Pipeline, have replied', { title: 'Pipeline · have replied', constraint: { label: 'Has replied', params: { replied_from: 0 } } })} have replied
+            {' · '}{valueButton(pipeline.needs_attention, 'Pipeline, need attention', { title: 'Pipeline · need attention', constraint: { label: 'Needs attention', params: { needs_attention: true } } })} need attention
           </p>
         </section>
       )}
@@ -279,6 +329,23 @@ export function StatsPage({ lists, sources, people, projectId, version, onOpenLe
           <button type="button" onClick={() => loadFeed(feed[feed.length - 1])} className="mt-2 w-full rounded-xl border border-[var(--line-strong)] py-2 text-sm font-semibold text-[var(--ink)]">Load older activity</button>
         )}
       </section>
+      {drill && (
+        <StatsLeads
+          drill={drill}
+          sourceId={sourceId}
+          listId={listId}
+          projectId={projectId}
+          lists={lists}
+          projects={projects}
+          people={people}
+          sources={sources}
+          assignees={assignees}
+          tags={tags}
+          version={version}
+          onOpenLead={onOpenLead}
+          onClose={() => setDrill(null)}
+        />
+      )}
     </main>
   )
 }

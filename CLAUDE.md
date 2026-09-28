@@ -103,7 +103,13 @@ no top-level `changes`. Any new lead write must append to it like the existing o
 list their columns instead of `l.*` so history stays out of them. Tags (`leads.tags`, JSON array),
 custom fields (`leads.custom_fields`, JSON object) and the follow-up (`next_action_at`,
 `next_action`) are set by their own actions, never by `update_lead`. The Stats page (`web/src/components/StatsPage.tsx`)
-builds local-time buckets client-side and passes them as JSON `[start, end)` pairs. Chart series
+builds local-time buckets client-side and passes them as JSON `[start, end)` pairs. Every Stats value that counts
+leads opens those leads in a popup (#37, `components/StatsLeads.tsx`): the leads page's own `Modal`,
+`LeadFilters` and `LeadTable` with a filter, via `list_leads`' `created_*` / `replied_*` / `flagged_*` /
+`has_messages` / `fit: 'none'` params. `qa/actions.mjs` asserts each stat equals its `list_leads` row
+count - change a stats count and its drill-down filter together. Message and source counts are not
+leads and stay plain. Chart bars are buttons with one tab stop per chart; the table view repeats
+each as a 44px button, which is why `qa:mobile` exempts `data-chart-bar`. `qa:stats` covers the popup. Chart series
 colours are `--series-1` / `--series-2` in `index.css`, validated for CVD and contrast in both
 themes - keep them if you add a chart.
 
