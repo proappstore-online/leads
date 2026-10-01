@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { q, x } from '../lib/actions'
-import { toInputValue } from '../lib/lead'
+import { isoTime, timeText, toInputValue } from '../lib/lead'
 import { PLATFORMS, type Lead, type Message } from '../types'
 import { inputClass } from './styles'
 import { EmptyState, LoadingState, RetryState } from './AsyncState'
@@ -95,7 +95,7 @@ export function Conversation({ lead, onChanged, readOnlyHistory = false }: { lea
                 {m.body}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-[var(--muted)]">
-                <span>{m.direction === 'out' ? 'You' : lead.name} · {m.platform} · <time dateTime={new Date(m.occurred_at).toISOString()}>{new Date(m.occurred_at).toLocaleString()}</time></span>
+                <span>{m.direction === 'out' ? 'You' : lead.name} · {m.platform} · <time dateTime={isoTime(m.occurred_at)}>{timeText(m.occurred_at)}</time></span>
                 {!readOnlyHistory && <>
                   <button type="button" onClick={() => startEdit(m)} className="rounded-lg px-2 py-1.5 font-semibold hover:bg-[var(--line)] hover:text-[var(--ink)]">Edit</button>
                   <button type="button" onClick={() => remove(m)} className="rounded-lg px-2 py-1.5 font-semibold hover:bg-[var(--line)] hover:text-[var(--error)]">Delete</button>

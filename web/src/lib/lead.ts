@@ -19,9 +19,23 @@ export function endOfToday(): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() - 1
 }
 
-/** Epoch ms → the local `YYYY-MM-DDTHH:mm` a datetime-local input expects. */
+/** The largest epoch-ms value a Date can hold either side of 1970; past it is an Invalid Date (#50). */
+export const MAX_TIME_MS = 8_640_000_000_000_000
+
+/** True for an epoch-ms value a Date can hold. Writes refuse anything else, but older rows may still carry it (#50). */
+export const isValidTime = (ms: unknown): ms is number => typeof ms === 'number' && Number.isFinite(ms) && Math.abs(ms) <= MAX_TIME_MS
+
+/** For a `<time dateTime>`: the ISO string, or undefined for a time that can't be shown. Never throws. */
+export const isoTime = (ms: unknown): string | undefined => (isValidTime(ms) ? new Date(ms).toISOString() : undefined)
+
+/** A time as people read it, or "Unknown time" for a value that isn't one. Never throws. */
+export const timeText = (ms: unknown, options?: Intl.DateTimeFormatOptions): string => (isValidTime(ms) ? new Date(ms).toLocaleString(undefined, options) : 'Unknown time')
+
+/** Epoch ms → the local `YYYY-MM-DDTHH:mm` a datetime-local input expects; '' (an empty input) for a time that can't be shown. */
 export function toInputValue(ms: number): string {
-  return new Date(ms - new Date(ms).getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+  if (!isValidTime(ms)) return ''
+  const local = ms - new Date(ms).getTimezoneOffset() * 60_000
+  return isValidTime(local) ? new Date(local).toISOString().slice(0, 16) : ''
 }
 
 /**

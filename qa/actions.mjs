@@ -784,5 +784,51 @@ for (const [field, domains] of Object.entries({ linkedin: ['linkedin.com'], twit
   ok(changeIn(owner, l2, 'delete_source'), '#52 delete_source shows in history and recent activity')
 }
 
+// #50: timestamps outside the JavaScript Date range are refused at every write, with no partial writes.
+{
+  const owner = randomUUID()
+  const MAX = 8_640_000_000_000_000
+  const BAD = [9_000_000_000_000_000, -9_000_000_000_000_000]
+  const lead = (extra = {}) => { const id = randomUUID(); return [id, call('create_lead', owner, { id, name: '#50 lead', country: 'AU', ...extra })] }
+  const leadRow = (id) => db.prepare('SELECT found_at, next_action_at FROM leads WHERE id = ?').get(id)
+  const messageCount = (id) => db.prepare('SELECT COUNT(*) AS n FROM messages WHERE lead_id = ?').get(id).n
+  const msg = (lead, at) => ({ id: randomUUID(), lead_id: lead, platform: 'Email', direction: 'out', body: 'Hello', occurred_at: at })
+
+  for (const bad of BAD) {
+    const [id, created] = lead({ found_at: bad })
+    ok(created === 0 && !leadRow(id), `#50 create_lead refuses found_at ${bad}`)
+  }
+  for (const good of [MAX, -MAX, Date.now()]) ok(lead({ found_at: good })[1] === 1, `#50 create_lead accepts found_at ${good}`)
+
+  const [target] = lead()
+  for (const bad of BAD) {
+    ok(call('enrich_lead', owner, { id: target, name: '#50 lead', found_at: bad }) === 0 && leadRow(target).found_at === null, `#50 enrich_lead refuses found_at ${bad}`)
+    ok(call('set_follow_up', owner, { id: target, at: bad, action: 'Call' }) === 0 && leadRow(target).next_action_at === null, `#50 set_follow_up refuses at ${bad}`)
+    ok(call('add_message', owner, msg(target, bad)) === 0 && messageCount(target) === 0, `#50 add_message refuses occurred_at ${bad}`)
+  }
+  ok(call('set_follow_up', owner, { id: target, at: MAX, action: 'Call' }) === 1, '#50 set_follow_up accepts the Date maximum')
+  ok(call('set_follow_up', owner, { id: target, at: null, action: null }) === 1 && leadRow(target).next_action_at === null, '#50 set_follow_up still clears with null')
+  ok(call('enrich_lead', owner, { id: target, name: '#50 lead', found_at: Date.now() }) === 1, '#50 enrich_lead accepts a normal found_at')
+
+  const first = msg(target, Date.now())
+  ok(call('add_message', owner, first) === 1, '#50 add_message accepts a normal time')
+  for (const bad of BAD) {
+    ok(call('update_message', owner, { id: first.id, platform: 'Email', direction: 'out', body: 'Edited', occurred_at: bad }) === 0
+      && db.prepare('SELECT occurred_at FROM messages WHERE id = ?').get(first.id).occurred_at === first.occurred_at, `#50 update_message refuses occurred_at ${bad}`)
+  }
+  const batch = [{ direction: 'out', occurred_at: 1, body: 'ok' }, { direction: 'in', occurred_at: BAD[0], body: 'bad' }]
+  ok(call('add_messages', owner, { lead_id: target, platform: 'Email', messages: JSON.stringify(batch) }) === 0 && messageCount(target) === 1, '#50 add_messages refuses a batch with one out-of-range time, whole')
+  ok(call('add_messages', owner, { lead_id: target, platform: 'Email', messages: JSON.stringify([{ direction: 'out', occurred_at: -MAX, body: 'edge' }]) }) === 1, '#50 add_messages accepts the Date minimum')
+
+  for (const mode of ['create', 'update']) {
+    const id = mode === 'create' ? randomUUID() : target
+    let refused = false
+    try {
+      call('save_lead_form', owner, { request_id: randomUUID(), payload: JSON.stringify({ mode, id, name: '#50 form', country: 'AU', found_at: BAD[0], lists: [], removed_lists: [], tags: '[]', fields: '{}' }) })
+    } catch { refused = true }
+    ok(refused && (mode === 'update' ? leadRow(target).found_at !== BAD[0] : !leadRow(id)), `#50 save_lead_form ${mode} refuses an out-of-range found_at`)
+  }
+}
+
 console.log(failures ? `\n${failures} check(s) failed` : `\nall checks passed`)
 process.exit(failures ? 1 : 0)

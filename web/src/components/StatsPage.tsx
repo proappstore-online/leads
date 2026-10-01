@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { q } from '../lib/actions'
 import { summariseChanges, type HistoryNames } from '../lib/history'
-import { projectOf } from '../lib/lead'
+import { isoTime, projectOf, timeText } from '../lib/lead'
 import { FITS, STATUSES, type LeadList, type Project, type ProjectMember, type Source } from '../types'
 import { BarChart } from './BarChart'
 import { EmptyState, LoadingState, RetryState } from './AsyncState'
@@ -305,11 +305,11 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
             {feed.map((e) => (
               <li key={e.k + e.at} className="flex flex-col gap-0.5 py-2 text-sm sm:flex-row sm:gap-3">
                 <time
-                  dateTime={new Date(e.at).toISOString()}
+                  dateTime={isoTime(e.at)}
                   title={e.at_known === 0 ? 'The time of this one was never recorded — shown at the lead\'s creation' : undefined}
                   className="shrink-0 text-xs tabular-nums text-[var(--muted)] sm:w-28"
                 >
-                  {new Date(e.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {timeText(e.at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   {e.at_known === 0 && <span className="block not-italic opacity-80">time not recorded</span>}
                 </time>
                 <div className="min-w-0 select-text [overflow-wrap:anywhere]">
