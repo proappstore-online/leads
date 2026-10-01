@@ -18,6 +18,7 @@ export const SECTIONS = {
   project_memberships: { table: 'project_memberships', columns: ['id', 'project_id', 'user_id', 'display_name', 'joined_at', 'created_at'] },
   project_invites: { table: 'project_invites', columns: ['code', 'project_id', 'created_by', 'expires_at', 'created_at'] },
   join_table_backfills: { table: 'join_table_backfills', columns: ['id', 'user_id', 'created_at'] },
+  legacy_project_membership_backfills: { table: 'legacy_project_membership_backfills', columns: ['id', 'project_id', 'user_id', 'created_at'] },
   legacy_lead_lists: { table: 'lead_lists', columns: ['lead_id', 'list_id', 'user_id', 'created_at'] },
   legacy_project_members: { table: 'project_members', columns: ['project_id', 'user_id', 'display_name', 'joined_at'] },
 }

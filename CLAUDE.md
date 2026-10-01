@@ -139,7 +139,10 @@ Schema changes: add a new entry to `migrations.json` (additive only, never edit 
 applied one), and keep `mcp.json` columns in step with it. A deployed table that needs a
 new identity shape is replaced by a new additive table; retain the old table as a read-only
 backfill source and add an idempotent, user-scoped action like `backfill_legacy_join_tables`.
-Record that transfer once per user so a legacy source row cannot resurrect a later deletion.
+Record list transfers once per user. Project transfers are consumed once per relationship in
+`legacy_project_membership_backfills` (0011), shared by owner and member. Backfill also checks
+both users’ old completion markers to preserve pre-0011 revocations. Remove/leave consume
+the legacy relationship even before backfill; only a fresh invite can grant access again.
 
 The same actions are exposed to MCP clients as `leads/<action>`, so an agent can add or
 look up leads and record or read their conversations directly.

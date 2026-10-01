@@ -107,7 +107,7 @@ call('add_lead_to_list', O, { lead_id: LEAD, list_id: L, project_id: P })
 call('create_lead', O, { id: OTHER, name: 'Bob', country: 'AU' })
 
 // --- PAS-DATA-001/002: forward-only join-table replacement and compatibility backfill ---------
-const replacement = MIGRATIONS.at(-1)
+const replacement = MIGRATIONS.find((m) => m.name === '0010_join_table_replacements')
 ok(replacement.name === '0010_join_table_replacements', 'the join-table replacement is an appended migration')
 ok(!/\b(?:INSERT|UPDATE|DELETE|DROP|RENAME)\b/i.test(replacement.sql), 'the appended migration is schema-additive only')
 ok(MIGRATIONS.find((m) => m.name === '0006_sources')?.sql.includes('INSERT INTO sources'), 'the deployed 0006 data migration remains unchanged')
@@ -142,9 +142,40 @@ const againBackfill = call('backfill_legacy_join_tables', O)
 ok(againBackfill.every((changes) => changes === 0), `the one-time backfill cannot resurrect a removed membership (${againBackfill.join(',')})`)
 ok(!call('list_leads', O, { list_id: L, project_id: P, limit: 50 }).some((lead) => lead.id === LEGACY_LEAD), 'legacy source rows do not override later membership removal')
 const unrelatedBackfill = call('backfill_legacy_join_tables', 'unrelated-backfill')
-ok(JSON.stringify(unrelatedBackfill) === JSON.stringify([0, 0, 1]) && db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0 && db.prepare('SELECT count(*) AS n FROM project_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0, 'a different user cannot backfill the owner’s legacy joins')
-const legacyRuntimeReferences = Object.values(TOOLS).filter((tool) => !['backfill_legacy_join_tables', 'delete_my_data', 'export_my_data'].includes(tool.name)).filter((tool) => /\b(?:lead_lists|project_members)\b/.test((tool.sql ?? '') + (tool.statements ?? []).join(' ')))
+ok(JSON.stringify(unrelatedBackfill) === JSON.stringify([0, 0, 1, 0]) && db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0 && db.prepare('SELECT count(*) AS n FROM project_memberships WHERE user_id = ?').get('unrelated-backfill').n === 0, 'a different user cannot backfill the owner’s legacy joins')
+const legacyRuntimeReferences = Object.values(TOOLS).filter((tool) => !['backfill_legacy_join_tables', 'remove_project_member', 'leave_project', 'delete_my_data', 'export_my_data'].includes(tool.name)).filter((tool) => /\b(?:lead_lists|project_members)\b/.test((tool.sql ?? '') + (tool.statements ?? []).join(' ')))
 ok(legacyRuntimeReferences.length === 0, 'only the explicit backfill, account purge and recovery export reference legacy join tables')
+
+// --- #38: legacy relationships stay revoked regardless of caller order ---------------------
+for (const first of ['owner', 'member', 'neither']) {
+  for (const action of ['remove_project_member', 'leave_project']) {
+    const owner = randomUUID(), member = randomUUID(), project = randomUUID()
+    call('create_project', owner, { id: project, name: 'Revocation regression' })
+    db.prepare('INSERT INTO project_members VALUES (?, ?, ?, ?)').run(project, member, 'Legacy', legacyAt)
+    if (first !== 'neither') call('backfill_legacy_join_tables', first === 'owner' ? owner : member)
+    call(action, action === 'leave_project' ? member : owner,
+      action === 'leave_project' ? { project_id: project } : { project_id: project, user_id: member })
+    call('backfill_legacy_join_tables', owner)
+    call('backfill_legacy_join_tables', member)
+    ok(!call('list_project_members', owner, { project_id: project }).some((m) => m.user_id === member),
+      `#38 ${action} survives both backfills (${first} migrated first)`)
+    call('create_project_invite', owner, { project_id: project })
+    const code = call('list_project_invites', owner, { project_id: project })[0].code
+    call('join_project', member, { code, display_name: 'Invited again' })
+    ok(call('list_project_members', owner, { project_id: project }).some((m) => m.user_id === member),
+      `#38 a fresh invite permits rejoining after ${action} (${first})`)
+  }
+}
+// Simulate a revocation made by the old code, before relationship markers existed.
+for (const first of ['owner', 'member']) {
+  const owner = randomUUID(), member = randomUUID(), project = randomUUID()
+  call('create_project', owner, { id: project, name: 'Previously revoked' })
+  db.prepare('INSERT INTO project_members VALUES (?, ?, ?, ?)').run(project, member, 'Legacy', legacyAt)
+  db.prepare('INSERT INTO join_table_backfills VALUES (?, ?, ?)').run(randomUUID(), first === 'owner' ? owner : member, now)
+  call('backfill_legacy_join_tables', first === 'owner' ? member : owner)
+  ok(call('list_project_members', owner, { project_id: project }).length === 0,
+    `#38 pre-fix revocation survives the other caller (${first} marker)`)
+}
 
 // Four things happen to Alice, days apart, and the lead row is edited last of all.
 call('set_lead_status', O, { id: LEAD, status: 'contacted' })
@@ -254,6 +285,7 @@ for (const m of MIGRATIONS) restored.exec(m.sql)
 restored.exec(importSql(recoveryRows.map((record) => JSON.stringify(record)).join('\n')))
 const scopeWhere = {
   leads: 'user_id = ?', lists: 'user_id = ?', memberships: 'user_id = ?', messages: 'user_id = ?', sources: 'user_id = ?', projects: 'user_id = ?', join_table_backfills: 'user_id = ?', legacy_lead_lists: 'user_id = ?',
+  legacy_project_membership_backfills: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
   project_memberships: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', project_invites: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', legacy_project_members: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
 }
 const ordered = (database, table, where) => database.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(O).map((row) => JSON.stringify(row)).sort()
@@ -293,7 +325,7 @@ call('add_message', O, { id: MSG, lead_id: LEAD, platform: 'Email', direction: '
 call('create_project_invite', O, { project_id: P })
 const CODE = db.prepare('SELECT code FROM project_invites WHERE project_id = ?').get(P).code
 const OWNER_IDS = [P, L, LEAD, OTHER, LEGACY_LEAD, LEGACY_MEMBER, 'src', MSG, CODE]
-const TABLES = ['leads', 'lists', 'lead_lists', 'lead_list_memberships', 'messages', 'project_invites', 'project_members', 'project_memberships', 'join_table_backfills', 'projects', 'sources']
+const TABLES = ['leads', 'lists', 'lead_lists', 'lead_list_memberships', 'messages', 'project_invites', 'project_members', 'project_memberships', 'join_table_backfills', 'legacy_project_membership_backfills', 'projects', 'sources']
 const snapshot = () => Object.fromEntries(TABLES.map((t) => [t, new Set(db.prepare(`SELECT * FROM ${t}`).all().map((r) => JSON.stringify(r)))]))
 const before = snapshot()
 
