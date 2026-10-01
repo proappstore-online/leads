@@ -48,11 +48,13 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
   onClose: () => void
   onSaved: () => void
 }) {
-  const memberOf = lead ? (lead.list_ids?.split(',') ?? []) : defaultListId ? [defaultListId] : []
+  const [snapshot, setSnapshot] = useState(lead)
+  const memberOf = snapshot ? (snapshot.list_ids?.split(',') ?? []) : defaultListId ? [defaultListId] : []
   const [fields, setFields] = useState<LeadFields>(lead ? toFields(lead) : EMPTY)
   const [selected, setSelected] = useState<Set<string>>(new Set(memberOf))
   // One identity for the lifetime of this form, including transport retries.
   const [saveId] = useState(() => lead?.id ?? crypto.randomUUID())
+  const retainedDraft = useRef(false)
   const pendingSave = useRef<{ request_id: string; payload: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -73,6 +75,9 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
   const [followAction, setFollowAction] = useState(lead?.next_action ?? '')
   const [tagsText, setTagsText] = useState(lead ? leadTags(lead).join(', ') : '')
   const [customRows, setCustomRows] = useState<[string, string][]>(lead ? leadCustomFields(lead) : [])
+  // Read the latest draft after the request, including edits made while it was pending.
+  const draft = useRef({ fields, selected, tagsText, customRows })
+  draft.current = { fields, selected, tagsText, customRows }
   // Someone else's lead assigned to you: status, flag and new messages only.
   const shared = Boolean(lead?.shared)
   const sharedIn = shared ? projects.find((p) => p.id === lead?.project_id) : undefined
@@ -101,7 +106,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
     }
   }
 
-  /** Save one change without closing the form, so unsaved edits stay, then re-read the lead. */
+  /** Save one change without closing the form, then reconcile its server snapshot with unsaved edits. */
   async function saveInPlace(action: string, params: Record<string, unknown>, refused: string): Promise<boolean> {
     if (!lead) return false
     setSaving(true)
@@ -109,9 +114,30 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
       const { changes } = await x(action, { id: lead.id, ...params })
       if (changes === 0) throw new Error(refused)
       const [fresh] = await q<Lead>('get_lead', { id: lead.id })
-      if (fresh) {
+      if (!fresh) throw new Error('Could not refresh this lead. Close and reopen it before editing.')
+      if (snapshot) {
+        const current = draft.current
+        const original = toFields(snapshot)
+        const next = toFields(fresh)
+        let dirty = false
+        for (const key of Object.keys(original) as (keyof LeadFields)[]) {
+          if (current.fields[key] !== original[key]) {
+            next[key] = current.fields[key]
+            dirty = true
+          }
+        }
+        const listsDirty = JSON.stringify([...current.selected].sort()) !== JSON.stringify([...memberOf].sort())
+        const tagsDirty = current.tagsText !== leadTags(snapshot).join(', ')
+        const customDirty = JSON.stringify(current.customRows) !== JSON.stringify(leadCustomFields(snapshot))
+        setFields(next)
+        if (!listsDirty) setSelected(new Set(fresh.list_ids?.split(',') ?? []))
+        if (!tagsDirty) setTagsText(leadTags(fresh).join(', '))
+        if (!customDirty) setCustomRows(leadCustomFields(fresh))
+        // A retained draft still belongs to the old version; never bless it with a new token.
+        retainedDraft.current ||= dirty || listsDirty || tagsDirty || customDirty
+        if (!retainedDraft.current) setBaseUpdatedAt(fresh.updated_at)
+        setSnapshot(fresh)
         setAttention({ on: Boolean(fresh.needs_attention), reason: fresh.attention_reason, at: fresh.attention_at })
-        setBaseUpdatedAt(fresh.updated_at)
         setAssignee(fresh.assigned_to_user_id)
         setStatus(fresh.status)
         setFollowUp({ at: fresh.next_action_at, action: fresh.next_action })
@@ -175,11 +201,13 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
   }
 
   function cancelEdit() {
-    if (!lead) return
-    setFields(toFields(lead))
+    if (!snapshot) return
+    setFields(toFields(snapshot))
+    retainedDraft.current = false
+    setBaseUpdatedAt(snapshot.updated_at)
     setSelected(new Set(memberOf))
-    setTagsText(leadTags(lead).join(', '))
-    setCustomRows(leadCustomFields(lead))
+    setTagsText(leadTags(snapshot).join(', '))
+    setCustomRows(leadCustomFields(snapshot))
     setError('')
     setEditing(false)
   }
@@ -190,7 +218,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
   }
 
   return (
-    <Modal title={lead ? lead.name : 'Add lead'} onClose={close}>
+    <Modal title={snapshot ? snapshot.name : 'Add lead'} onClose={close}>
       {lead && (
         <div role="tablist" className="mt-3 flex gap-1 border-b border-[var(--line)]">
           {(['details', 'conversation', 'history'] as const).map((t) => (
@@ -267,7 +295,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
       {lead && tab === 'details' && !editing && (
         <>
           {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
-          <LeadView lead={{ ...lead, status, next_action_at: followUp.at, next_action: followUp.action }} lists={lists} onEdit={shared ? undefined : () => setEditing(true)} />
+          <LeadView lead={{ ...snapshot!, status, next_action_at: followUp.at, next_action: followUp.action }} lists={lists} onEdit={shared ? undefined : () => setEditing(true)} />
         </>
       )}
       <form onSubmit={save} hidden={tab !== 'details' || !editing} className="mt-4 space-y-5">
