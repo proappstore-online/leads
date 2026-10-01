@@ -650,6 +650,32 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
   }
 }
 
+// #48: deduplication counts occurrences independently for each resolved platform.
+{
+  const user = 'bulk-platform-owner'
+  const lead = randomUUID()
+  call('create_lead', user, { id: lead, name: 'Platform threads', country: 'AU' })
+  const message = { direction: 'out', occurred_at: 1, body: 'same' }
+  const add = (messages, platform = 'Email') => call('add_messages', user, { lead_id: lead, platform, messages: JSON.stringify(messages) })
+  const rows = () => call('list_messages', user, { lead_id: lead })
+  call('add_message', user, { id: randomUUID(), lead_id: lead, platform: 'Email', ...message })
+  ok(add([{ ...message, platform: 'SMS' }]) === 1, '#48: stored Email does not suppress matching SMS')
+  ok(add([{ ...message, platform: 'SMS' }]) === 0, '#48: retry of matching SMS adds nothing')
+  const mixed = [{ ...message, platform: 'SMS' }, message, { ...message, platform: 'SMS' }, { ...message, platform: 'Email' }, message]
+  ok(add(mixed) === 3, '#48: mixed batch adds only missing occurrences per platform')
+  ok(rows().filter((m) => m.platform === 'Email').length === 3 && rows().filter((m) => m.platform === 'SMS').length === 2, '#48: default and explicit Email share a key while SMS counts independently')
+  const snapshot = JSON.stringify(rows())
+  ok(add(mixed) === 0 && JSON.stringify(rows()) === snapshot, '#48: mixed-platform retry preserves every stored row')
+  const fresh = { ...message, occurred_at: 2 }
+  const thread = [{ ...fresh, platform: 'SMS' }, fresh, { ...fresh, platform: 'SMS' }, fresh]
+  ok(add(thread) === 4, '#48: fresh mixed batch preserves intentional repeats on both platforms')
+  ok(JSON.stringify(rows().filter((m) => m.occurred_at === 2).map((m) => m.platform)) === JSON.stringify(['SMS', 'Email', 'SMS', 'Email']), '#48: mixed-platform messages retain input order')
+  ok(add(thread) === 0, '#48: fresh mixed batch retry adds nothing')
+  ok(add([{ ...message, occurred_at: 3 }], 'SMS') === 1 && add([{ ...message, occurred_at: 3 }], 'Email') === 1, '#48: changing the action default records a distinct platform')
+  ok(add([{ ...message, occurred_at: 3, platform: 'SMS' }], 'Email') === 0, '#48: explicit platform overrides the action default during deduplication')
+  ok(add([{ ...message, occurred_at: 4 }, { ...message, platform: 'invalid' }]) === 0 && !rows().some((m) => m.occurred_at === 4), '#48: invalid platform still rejects the whole batch')
+}
+
 // #46: browser authority separators must never bypass platform-domain validation.
 for (const [field, domains] of Object.entries({ linkedin: ['linkedin.com'], twitter: ['x.com', 'twitter.com'], instagram: ['instagram.com'], facebook: ['facebook.com', 'fb.com', 'fb.me'], tiktok: ['tiktok.com'], youtube: ['youtube.com', 'youtu.be'], github: ['github.com'] })) {
   for (const domain of domains) {
