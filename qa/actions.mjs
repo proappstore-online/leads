@@ -701,5 +701,88 @@ for (const [field, domains] of Object.entries({ linkedin: ['linkedin.com'], twit
   }
 }
 
+// #52: source changes and automatic unassignments are recorded in the lead history and activity feed.
+{
+  const lastEntry = (lead) => JSON.parse(db.prepare('SELECT history FROM leads WHERE id = ?').get(lead).history).at(-1)
+  const historyLength = (lead) => JSON.parse(db.prepare('SELECT history FROM leads WHERE id = ?').get(lead).history).length
+  const changeIn = (owner, lead, via) => call('recent_activity', owner, { limit: 50 }).some((e) => e.kind === 'lead_changed' && e.lead_id === lead) && call('get_lead_history', owner, { id: lead })[0].via === via
+
+  /** A lead in a project list, assigned to a collaborator who joined that project. */
+  function assigned() {
+    const owner = randomUUID(), member = randomUUID(), project = randomUUID(), list = randomUUID(), lead = randomUUID()
+    call('create_project', owner, { id: project, name: '#52 project' })
+    call('create_list', owner, { id: list, name: '#52 list', project_id: project })
+    call('create_lead', owner, { id: lead, name: '#52 lead', country: 'AU' })
+    call('add_lead_to_list', owner, { lead_id: lead, list_id: list, project_id: project })
+    call('create_project_invite', owner, { project_id: project })
+    call('join_project', member, { code: call('list_project_invites', owner, { project_id: project })[0].code, display_name: 'Helper' })
+    ok(call('assign_lead', owner, { id: lead, user_id: member }) === 1, '#52 setup: the collaborator is assigned')
+    return { owner, member, project, list, lead }
+  }
+  const unassigned = ({ owner, member, lead }, via, by) => {
+    const entry = lastEntry(lead)
+    ok(db.prepare('SELECT assigned_to_user_id AS a FROM leads WHERE id = ?').get(lead).a === null, `#52 ${via} unassigns the collaborator`)
+    ok(entry.via === via && entry.by === by && JSON.stringify(entry.changes) === JSON.stringify({ assigned_to_user_id: [member, null] }) && typeof entry.at === 'number',
+      `#52 ${via} records the unassignment in the lead history`)
+    ok(changeIn(owner, lead, via), `#52 ${via} shows the unassignment in history and recent activity`)
+  }
+
+  let a = assigned()
+  call('remove_project_member', a.owner, { project_id: a.project, user_id: a.member })
+  unassigned(a, 'remove_project_member', a.owner)
+
+  a = assigned()
+  call('leave_project', a.member, { project_id: a.project })
+  unassigned(a, 'leave_project', a.member)
+
+  a = assigned()
+  call('delete_list', a.owner, { id: a.list, project_id: a.project })
+  unassigned(a, 'delete_list', a.owner)
+
+  a = assigned()
+  const elsewhere = randomUUID()
+  call('create_project', a.owner, { id: elsewhere, name: '#52 other project' })
+  call('set_list_project', a.owner, { id: a.list, project_id: a.project, to_project_id: elsewhere })
+  unassigned(a, 'set_list_project', a.owner)
+
+  // delete_project only runs on an empty project; its sweep catches an assignment left stale.
+  a = assigned()
+  db.prepare('DELETE FROM lead_list_memberships WHERE lead_id = ?').run(a.lead)
+  db.prepare('DELETE FROM lists WHERE id = ?').run(a.list)
+  call('delete_project', a.owner, { id: a.project })
+  unassigned(a, 'delete_project', a.owner)
+
+  // Leads still reachable keep their assignee and gain no history entry.
+  a = assigned()
+  const before = historyLength(a.lead)
+  call('remove_project_member', a.owner, { project_id: a.project, user_id: randomUUID() })
+  ok(historyLength(a.lead) === before, '#52 a cleanup that changes nothing adds no history entry')
+
+  // Sources.
+  const owner = randomUUID(), s1 = randomUUID(), s2 = randomUUID(), l1 = randomUUID(), l2 = randomUUID()
+  call('create_source', owner, { id: s1, name: '#52 source one', kind: 'Event' })
+  call('create_source', owner, { id: s2, name: '#52 source two', kind: 'Event' })
+  call('create_lead', owner, { id: l1, name: '#52 no source', country: 'AU' })
+  call('create_lead', owner, { id: l2, name: '#52 already s2', country: 'AU', source_id: s2 })
+  const l2Before = historyLength(l2)
+  call('assign_leads_to_source', owner, { source_id: s2, lead_ids: JSON.stringify([l1, l2]) })
+  ok(JSON.stringify(lastEntry(l1).changes) === JSON.stringify({ source_id: [null, s2] }) && lastEntry(l1).via === 'assign_leads_to_source' && lastEntry(l1).by === owner,
+    '#52 assign_leads_to_source records the source change')
+  ok(changeIn(owner, l1, 'assign_leads_to_source'), '#52 assign_leads_to_source shows in history and recent activity')
+  ok(historyLength(l2) === l2Before, '#52 assign_leads_to_source records only leads whose source actually changed')
+  call('assign_leads_to_source', owner, { source_id: s1, lead_ids: JSON.stringify([l2]) })
+  ok(JSON.stringify(lastEntry(l2).changes) === JSON.stringify({ source_id: [s2, s1] }), '#52 moving between sources records old and new')
+  call('assign_leads_to_source', owner, { source_id: 'none', lead_ids: JSON.stringify([l1]) })
+  ok(JSON.stringify(lastEntry(l1).changes) === JSON.stringify({ source_id: [s2, null] }), '#52 clearing the source records it')
+
+  // Deleting a source records the cleared source on every lead it held, keeping the 300-entry cap.
+  db.prepare('UPDATE leads SET history = ? WHERE id = ?').run(JSON.stringify(Array.from({ length: 300 }, (_, i) => ({ at: i, by: owner, via: 'seed', changes: { status: ['new', 'new'] } }))), l2)
+  call('delete_source', owner, { id: s1 })
+  const capped = JSON.parse(db.prepare('SELECT history, source_id FROM leads WHERE id = ?').get(l2).history)
+  ok(capped.length === 300 && capped[0].at === 1 && capped.at(-1).via === 'delete_source' && JSON.stringify(capped.at(-1).changes) === JSON.stringify({ source_id: [s1, null] }),
+    '#52 delete_source records the cleared source and keeps the 300-entry cap')
+  ok(changeIn(owner, l2, 'delete_source'), '#52 delete_source shows in history and recent activity')
+}
+
 console.log(failures ? `\n${failures} check(s) failed` : `\nall checks passed`)
 process.exit(failures ? 1 : 0)

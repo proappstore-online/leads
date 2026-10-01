@@ -125,7 +125,7 @@
       "statements": [
         "DELETE FROM lead_list_memberships WHERE list_id = :id AND user_id = :__user_id AND EXISTS (SELECT 1 FROM lists lp WHERE lp.id = :id AND lp.user_id = :__user_id AND (lp.project_id = :project_id OR (:project_id = 'none' AND lp.project_id IS NULL)))",
         "DELETE FROM lists WHERE id = :id AND user_id = :__user_id AND (lists.project_id = :project_id OR (:project_id = 'none' AND lists.project_id IS NULL))",
-        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
+        "UPDATE leads SET assigned_to_user_id = NULL, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'delete_list', 'changes', json(json_object('assigned_to_user_id', json_array(leads.assigned_to_user_id, NULL)))))) WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
       ],
       "params": {
         "id": {
@@ -205,7 +205,7 @@
         "DELETE FROM project_invites WHERE project_id IN (SELECT id FROM projects WHERE id = :id AND user_id = :__user_id) AND NOT EXISTS (SELECT 1 FROM lists WHERE project_id = :id)",
         "DELETE FROM project_memberships WHERE project_id IN (SELECT id FROM projects WHERE id = :id AND user_id = :__user_id) AND NOT EXISTS (SELECT 1 FROM lists WHERE project_id = :id)",
         "DELETE FROM projects WHERE id = :id AND user_id = :__user_id AND NOT EXISTS (SELECT 1 FROM lists WHERE project_id = :id)",
-        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
+        "UPDATE leads SET assigned_to_user_id = NULL, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'delete_project', 'changes', json(json_object('assigned_to_user_id', json_array(leads.assigned_to_user_id, NULL)))))) WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
       ],
       "params": {
         "id": {
@@ -221,7 +221,7 @@
       "description": "Move a list into another of your projects. project_id is the project it is in now ('none' for a list made before projects), to_project_id the one it moves to. A list is always in a project, so it cannot be taken out of one. results[0].meta.changes is 0 when the list is not in project_id or to_project_id is not yours. Leads assigned to someone who loses access through this are unassigned",
       "statements": [
         "UPDATE lists SET project_id = :to_project_id WHERE id = :id AND user_id = :__user_id AND (lists.project_id = :project_id OR (:project_id = 'none' AND lists.project_id IS NULL)) AND EXISTS (SELECT 1 FROM projects p WHERE p.id = :to_project_id AND p.user_id = :__user_id)",
-        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
+        "UPDATE leads SET assigned_to_user_id = NULL, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'set_list_project', 'changes', json(json_object('assigned_to_user_id', json_array(leads.assigned_to_user_id, NULL)))))) WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
       ],
       "params": {
         "id": {
@@ -282,7 +282,7 @@
       "description": "Remove someone from your project (owner only). Leads assigned to them that they can no longer reach are unassigned",
       "statements": [
         "DELETE FROM project_memberships WHERE project_id = :project_id AND user_id = :user_id AND project_id IN (SELECT id FROM projects WHERE user_id = :__user_id)",
-        "UPDATE leads SET assigned_to_user_id = NULL WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)",
+        "UPDATE leads SET assigned_to_user_id = NULL, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'remove_project_member', 'changes', json(json_object('assigned_to_user_id', json_array(leads.assigned_to_user_id, NULL)))))) WHERE user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)",
         "INSERT OR IGNORE INTO legacy_project_membership_backfills (id, project_id, user_id, created_at) SELECT lower(hex(randomblob(16))), pm.project_id, pm.user_id, :__now FROM project_members pm JOIN projects p ON p.id = pm.project_id WHERE pm.project_id = :project_id AND p.user_id = :__user_id AND pm.user_id = :user_id"
       ],
       "params": {
@@ -303,7 +303,7 @@
       "description": "Leave a project you were invited to. Leads assigned to you that you can no longer reach are unassigned",
       "statements": [
         "DELETE FROM project_memberships WHERE project_id = :project_id AND user_id = :__user_id",
-        "UPDATE leads SET assigned_to_user_id = NULL WHERE assigned_to_user_id = :__user_id AND user_id <> :__user_id AND user_id IN (SELECT user_id FROM projects WHERE id = :project_id) AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = leads.id)",
+        "UPDATE leads SET assigned_to_user_id = NULL, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'leave_project', 'changes', json(json_object('assigned_to_user_id', json_array(leads.assigned_to_user_id, NULL)))))) WHERE assigned_to_user_id = :__user_id AND user_id <> :__user_id AND user_id IN (SELECT user_id FROM projects WHERE id = :project_id) AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = :__user_id WHERE ll.lead_id = leads.id)",
         "INSERT OR IGNORE INTO legacy_project_membership_backfills (id, project_id, user_id, created_at) SELECT lower(hex(randomblob(16))), pm.project_id, pm.user_id, :__now FROM project_members pm JOIN projects p ON p.id = pm.project_id WHERE pm.project_id = :project_id AND pm.user_id = :__user_id"
       ],
       "params": {
@@ -1342,7 +1342,7 @@
       "requires_auth": true,
       "description": "Delete a source. Its leads stay in the database and simply have no source afterwards",
       "statements": [
-        "UPDATE leads SET source_id = NULL, updated_at = :__now WHERE source_id = :id AND user_id = :__user_id",
+        "UPDATE leads SET source_id = NULL, updated_at = :__now, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'delete_source', 'changes', json(json_object('source_id', json_array(leads.source_id, NULL)))))) WHERE source_id = :id AND user_id = :__user_id",
         "DELETE FROM sources WHERE id = :id AND user_id = :__user_id"
       ],
       "params": {
@@ -1357,7 +1357,7 @@
       "operation": "execute",
       "requires_auth": true,
       "description": "Set the source of one or many leads in one call - replaces whatever source they had. \"changes\" is the number of leads updated. \"changes\": 0 means source_id is not one of your sources, or none of the lead ids exist.",
-      "sql": "UPDATE leads SET source_id = NULLIF(:source_id, 'none'), updated_at = :__now WHERE user_id = :__user_id AND id IN (SELECT value FROM json_each(CASE WHEN json_valid(:lead_ids) THEN :lead_ids ELSE '[]' END)) AND (:source_id = 'none' OR EXISTS (SELECT 1 FROM sources s WHERE s.id = :source_id AND s.user_id = :__user_id))",
+      "sql": "UPDATE leads SET source_id = NULLIF(:source_id, 'none'), updated_at = :__now, history = CASE WHEN leads.source_id IS NULLIF(:source_id, 'none') THEN leads.history ELSE json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'assign_leads_to_source', 'changes', json(json_object('source_id', json_array(leads.source_id, NULLIF(:source_id, 'none'))))))) END WHERE user_id = :__user_id AND id IN (SELECT value FROM json_each(CASE WHEN json_valid(:lead_ids) THEN :lead_ids ELSE '[]' END)) AND (:source_id = 'none' OR EXISTS (SELECT 1 FROM sources s WHERE s.id = :source_id AND s.user_id = :__user_id))",
       "params": {
         "source_id": {
           "type": "string",
