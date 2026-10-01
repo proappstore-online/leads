@@ -15,14 +15,19 @@ export const SOCIALS: { key: keyof LeadFields; label: string; domains: string[];
   { key: 'github', label: 'GitHub', domains: ['github.com'], example: 'https://github.com/janedoe' },
 ]
 
-/** Mirrors the SQL guard: https://, no spaces, the host is the platform's domain (or a subdomain of it), and a path after it. */
+/** Mirrors SQL: HTTPS, an unambiguous platform host and a nonempty profile path. */
 export function isProfileLink(domains: string[], value: string): boolean {
-  if (/\s/.test(value) || !value.toLowerCase().startsWith('https://')) return false
-  const rest = value.slice('https://'.length)
-  const slash = rest.indexOf('/')
-  if (slash < 0 || slash === rest.length - 1) return false
-  const host = rest.slice(0, slash).toLowerCase()
-  return domains.some((d) => host === d || host.endsWith(`.${d}`))
+  if (/[\\\s\u0000-\u001f\u007f]/.test(value) || !/^https:\/\//i.test(value)) return false
+  // Restrict the raw authority too: URL parsing normalizes credentials and escapes.
+  const authority = value.slice('https://'.length).split('/')[0].toLowerCase()
+  if (!/^[a-z0-9.-]+$/.test(authority)) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.hostname === authority && url.pathname.length > 1
+      && domains.some((d) => url.hostname === d || url.hostname.endsWith(`.${d}`))
+  } catch {
+    return false
+  }
 }
 
 /** Websites may be typed without a scheme. */

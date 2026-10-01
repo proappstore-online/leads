@@ -650,5 +650,30 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
   }
 }
 
+// #46: browser authority separators must never bypass platform-domain validation.
+for (const [field, domains] of Object.entries({ linkedin: ['linkedin.com'], twitter: ['x.com', 'twitter.com'], instagram: ['instagram.com'], facebook: ['facebook.com', 'fb.com', 'fb.me'], tiktok: ['tiktok.com'], youtube: ['youtube.com', 'youtu.be'], github: ['github.com'] })) {
+  for (const domain of domains) {
+    const owner = `url-${domain}`
+    const id = randomUUID()
+    call('create_lead', owner, { id, name: 'URL test', country: 'AU' })
+    for (const value of [`https://evil.example\\foo.${domain}/profile`, `https://evil.example?foo.${domain}/profile`, `https://evil.example#foo.${domain}/profile`, `https://user@www.${domain}/profile`, `https://www.${domain}/pro\\file`, `https://www.${domain}/pro\tfile`, `https://www.${domain}/pro\nfile`, `https://www.${domain}/pro\u0000file`]) {
+      ok(call('check_lead_links', owner, { [field]: value })[0][field].startsWith('REJECTED'), `#46: ${domain} diagnostic rejects ${JSON.stringify(value)}`)
+      ok(call('create_lead', owner, { id: randomUUID(), name: 'Bad URL', country: 'AU', [field]: value }) === 0, `#46: ${domain} create rejects unsafe URL`)
+      for (const action of ['update_lead', 'enrich_lead']) {
+        ok(call(action, owner, { id, name: 'URL test', [field]: value }) === 0, `#46: ${domain} ${action} rejects unsafe URL`)
+      }
+      for (const mode of ['create', 'update']) {
+        let rejected = false
+        try { call('save_lead_form', owner, { request_id: randomUUID(), payload: JSON.stringify({ mode, id: mode === 'create' ? randomUUID() : id, name: 'URL test', country: 'AU', [field]: value, lists: [], removed_lists: [], tags: '[]', fields: '{}' }) }) } catch { rejected = true }
+        ok(rejected, `#46: ${domain} atomic ${mode} rejects unsafe URL`)
+      }
+    }
+    for (const value of [`https://${domain}/profile`, `HTTPS://WWW.${domain.toUpperCase()}/profile?tab=1#about`]) {
+      ok(call('check_lead_links', owner, { [field]: value })[0][field] === 'ok', `#46: ${domain} accepts valid profile URL`)
+      ok(call('update_lead', owner, { id, name: 'URL test', [field]: value }) === 1, `#46: ${domain} stores valid profile URL`)
+    }
+  }
+}
+
 console.log(failures ? `\n${failures} check(s) failed` : `\nall checks passed`)
 process.exit(failures ? 1 : 0)
