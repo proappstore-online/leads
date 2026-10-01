@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 export const EXPORT_FORMAT = 'leads-export/v1'
 
 export const SECTIONS = {
+  lead_form_saves: { table: 'lead_form_saves', columns: ['id', 'user_id', 'payload', 'completed', 'valid', 'created_at'] },
   leads: { table: 'leads', columns: ['id', 'user_id', 'name', 'title', 'company', 'email', 'phone', 'website', 'location', 'linkedin', 'twitter', 'instagram', 'facebook', 'tiktok', 'youtube', 'github', 'status', 'notes', 'created_at', 'updated_at', 'source', 'fit', 'source_url', 'found_at', 'needs_attention', 'attention_reason', 'attention_at', 'source_id', 'country', 'assigned_to_user_id', 'tags', 'custom_fields', 'next_action_at', 'next_action', 'history'] },
   lists: { table: 'lists', columns: ['id', 'user_id', 'name', 'purpose', 'created_at', 'project_id'] },
   memberships: { table: 'lead_list_memberships', columns: ['id', 'lead_id', 'list_id', 'user_id', 'created_at'] },

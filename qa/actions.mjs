@@ -72,7 +72,18 @@ export function call(name, user, params = {}) {
   if (!tool) throw new Error(`no such action: ${name}`)
   const resolved = resolve(tool, params)
   if (tool.operation === 'batch') {
-    return tool.statements.map((s) => db.prepare(...[bind(s, resolved, user)[0]]).run(...bind(s, resolved, user)[1]).changes)
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const results = tool.statements.map((s) => {
+        const [sql, values] = bind(s, resolved, user)
+        return db.prepare(sql).run(...values).changes
+      })
+      db.exec('COMMIT')
+      return results
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
   }
   const [sql, values] = bind(tool.sql, resolved, user)
   const stmt = db.prepare(sql)
@@ -284,6 +295,7 @@ const restored = new DatabaseSync(':memory:')
 for (const m of MIGRATIONS) restored.exec(m.sql)
 restored.exec(importSql(recoveryRows.map((record) => JSON.stringify(record)).join('\n')))
 const scopeWhere = {
+  lead_form_saves: 'user_id = ?',
   leads: 'user_id = ?', lists: 'user_id = ?', memberships: 'user_id = ?', messages: 'user_id = ?', sources: 'user_id = ?', projects: 'user_id = ?', join_table_backfills: 'user_id = ?', legacy_lead_lists: 'user_id = ?',
   legacy_project_membership_backfills: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
   project_memberships: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', project_invites: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', legacy_project_members: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
@@ -325,13 +337,14 @@ call('add_message', O, { id: MSG, lead_id: LEAD, platform: 'Email', direction: '
 call('create_project_invite', O, { project_id: P })
 const CODE = db.prepare('SELECT code FROM project_invites WHERE project_id = ?').get(P).code
 const OWNER_IDS = [P, L, LEAD, OTHER, LEGACY_LEAD, LEGACY_MEMBER, 'src', MSG, CODE]
-const TABLES = ['leads', 'lists', 'lead_lists', 'lead_list_memberships', 'messages', 'project_invites', 'project_members', 'project_memberships', 'join_table_backfills', 'legacy_project_membership_backfills', 'projects', 'sources']
+const TABLES = ['lead_form_saves', 'leads', 'lists', 'lead_lists', 'lead_list_memberships', 'messages', 'project_invites', 'project_members', 'project_memberships', 'join_table_backfills', 'legacy_project_membership_backfills', 'projects', 'sources']
 const snapshot = () => Object.fromEntries(TABLES.map((t) => [t, new Set(db.prepare(`SELECT * FROM ${t}`).all().map((r) => JSON.stringify(r)))]))
 const before = snapshot()
 
 /** What a stranger would try: the owner's ids for every id-shaped parameter, valid values elsewhere. */
 const ARGS = {
   id: LEAD, lead_id: LEAD, list_id: L, project_id: P, to_project_id: P, source_id: 'src', code: CODE, user_id: O,
+  request_id: randomUUID(), payload: JSON.stringify({ id: LEAD, name: 'Alice', country: 'AU', status: 'new', mode: 'update', lists: [], removed_lists: [], tags: '[]', fields: '{}' }),
   name: 'Alice', country: 'AU', kind: 'Reddit', platform: 'Email', direction: 'out', body: 'x', occurred_at: now,
   status: 'contacted', reason: 'x', note: 'x', client_mutation_id: 'cross-user-retry', action: 'call', at: now, fields: '{"a":1}', tags: '["t"]',
   messages: '[{"direction":"in","body":"x","occurred_at":1}]', lead_ids: JSON.stringify([LEAD]),
@@ -340,6 +353,7 @@ const ARGS = {
 /** Actions where a stranger's call is NOT a cross-user attempt, each with why. */
 const SKIP = {
   how_to_use: 'static guidance, the same for every caller',
+  save_lead_form: 'refusals throw to roll back the transaction; ownership and replay isolation are tested in #42',
   backfill_legacy_join_tables: 'creates only a caller-owned completion marker; its legacy-copy and isolation behaviour is tested above',
   get_project_invite: 'the invite code IS the grant — reading it by code is how joining works',
   join_project: 'the grant path; its one-shot behaviour is tested below',
@@ -535,6 +549,87 @@ ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code 
   const untouched = ['leads', 'lists', 'sources', 'messages', 'projects'].every((t) =>
     [...ownerBefore[t]].filter((r) => { const row = JSON.parse(r); return (row.user_id === O) && !(t === 'leads' && row.id === OTHER) && !(t === 'lists' && row.id === OL) }).every((r) => ownerAfter[t].has(r)))
   ok(untouched, "every other row of the owner's is still there, unchanged")
+}
+
+// #42: an atomic form save survives refused stages and uncertain transport outcomes.
+{
+  const user = 'atomic-form-owner'
+  const id = randomUUID()
+  const request = randomUUID()
+  call('create_project', user, { id: request, name: 'Atomic' })
+  call('create_list', user, { id: request, project_id: request, name: 'Atomic list' })
+  const payload = { id, name: 'Atomic lead', country: 'AU', status: 'new', mode: 'create', lists: [{ id: request, project_id: request }], removed_lists: [], tags: '["warm"]', fields: '{"Budget":"5k"}' }
+  const save = (value = payload, key = request) => call('save_lead_form', user, { request_id: key, payload: JSON.stringify(value) })
+  const state = () => JSON.stringify(['leads', 'lead_list_memberships', 'lead_form_saves'].map((t) => db.prepare(`SELECT * FROM ${t} WHERE user_id = ? ORDER BY id`).all(user)))
+  const refused = (value, label) => {
+    const before = state()
+    let threw = false
+    try { save(value) } catch { threw = true }
+    ok(threw && state() === before, label)
+  }
+  if (!TOOLS.save_lead_form) {
+    ok(false, '#42: transactional save_lead_form action exists')
+  } else {
+    refused({ ...payload, lists: [{ id: request, project_id: 'wrong' }] }, '#42: refused membership rolls back the entire save')
+    refused({ ...payload, tags: '[42]' }, '#42: refused tags roll back the entire save')
+    refused({ ...payload, fields: '{"Budget":[]}' }, '#42: refused fields roll back the entire save')
+    refused({ ...payload, country: 'XX' }, '#42: refused lead rolls back the entire save')
+    const tool = TOOLS.save_lead_form
+    const statements = tool.statements
+    for (let stage = 1; stage <= statements.length; stage++) {
+      const before = state()
+      tool.statements = [...statements.slice(0, stage), "INSERT INTO leads (id) VALUES (:request_id)", ...statements.slice(stage)]
+      let threw = false
+      try { save() } catch { threw = true }
+      ok(threw && state() === before, `#42: failure after statement ${stage} rolls back all writes`)
+    }
+    tool.statements = statements
+    save()
+    const committed = state()
+    let identityConflict = false
+    try { save(payload, randomUUID()) } catch { identityConflict = true }
+    ok(identityConflict && state() === committed, '#42: a different request key cannot create the same form lead twice')
+    save() // Simulate a committed request whose response was lost.
+    ok(state() === committed, '#42: create retry is a no-op, including history and memberships')
+    ok(db.prepare('SELECT count(*) AS n FROM leads WHERE user_id = ?').get(user).n === 1, '#42: retry creates exactly one lead without email or profiles')
+    refused({ ...payload, name: 'different' }, '#42: an idempotency key cannot be reused for another payload')
+    const row = db.prepare('SELECT * FROM leads WHERE id = ?').get(id)
+    ok(JSON.parse(row.tags)[0] === 'warm' && JSON.parse(row.custom_fields).Budget === '5k' && db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE lead_id = ?').get(id).n === 1, '#42: successful save includes lists, tags and fields')
+    const edit = { ...payload, mode: 'update', name: 'Updated', if_unchanged_since: row.updated_at, lists: [], removed_lists: payload.lists }
+    for (let stage = 1; stage <= statements.length; stage++) {
+      const before = state()
+      tool.statements = [...statements.slice(0, stage), "INSERT INTO leads (id) VALUES (:request_id)", ...statements.slice(stage)]
+      let threw = false
+      try { save(edit, randomUUID()) } catch { threw = true }
+      ok(threw && state() === before, `#42: edit failure after statement ${stage} rolls back all writes`)
+    }
+    tool.statements = statements
+    save(edit, randomUUID())
+    const stale = state()
+    let conflict = false
+    try { save({ ...edit, if_unchanged_since: -1 }, randomUUID()) } catch { conflict = true }
+    ok(conflict && state() === stale, '#42: stale edit leaves the whole save unchanged')
+    const editKey = randomUUID()
+    edit.if_unchanged_since = db.prepare('SELECT updated_at FROM leads WHERE id = ?').get(id).updated_at
+    save(edit, editKey)
+    const edited = state()
+    save(edit, editKey)
+    ok(state() === edited, '#42: update retry succeeds with its original conflict token')
+    ok(db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE lead_id = ?').get(id).n === 0, '#42: selected list removal is saved')
+    const isolated = state()
+    for (const key of [request, randomUUID()]) {
+      let refused = false
+      try { call('save_lead_form', 'atomic-stranger', { request_id: key, payload: JSON.stringify(edit) }) } catch { refused = true }
+      ok(refused && state() === isolated, '#42: another user cannot replay a receipt or edit the lead')
+    }
+    const exported = call('export_my_data', user, { section: 'lead_form_saves' }).filter((r) => r.data !== null)
+    ok(exported.length === 3, '#42: completed retry receipts are included in recovery export')
+    call('delete_lead', user, { id })
+    save() // A delayed retry must not resurrect a deleted contact.
+    ok(!db.prepare('SELECT id FROM leads WHERE id = ?').get(id), '#42: delayed creation retry never resurrects a deleted lead')
+    call('delete_my_data', user, { confirm: 'DELETE MY DATA' })
+    ok(db.prepare('SELECT count(*) AS n FROM lead_form_saves WHERE user_id = ?').get(user).n === 0, '#42: delete_my_data removes the durable receipts')
+  }
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : `\nall checks passed`)

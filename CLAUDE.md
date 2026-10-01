@@ -146,3 +146,13 @@ the legacy relationship even before backfill; only a fresh invite can grant acce
 
 The same actions are exposed to MCP clients as `leads/<action>`, so an agent can add or
 look up leads and record or read their conversations directly.
+
+Lead form saves use `save_lead_form` (#42), a registered D1 transaction that reuses
+create/update/tag/custom-field validation and history SQL and validates list ownership
+and project before changing anything. Constraint guards turn refused zero-row lead,
+tag or field writes into a transaction rollback. `lead_form_saves` (0012) holds the
+exact payload and completion receipt; reuse the request UUID and identical payload
+on retry. Completed receipts bypass all mutations and stale-token checks. Keep
+receipts when deleting a lead, so a late retry cannot recreate it; delete them with
+`delete_my_data` and include them in recovery exports. `qa:save` tests form transport
+retries; `qa/actions.mjs` injects failures after every transaction statement.

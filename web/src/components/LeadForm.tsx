@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { q, x } from '../lib/actions'
 import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
 import { endOfToday, leadCustomFields, leadTags, projectOf, toInputValue } from '../lib/lead'
@@ -51,6 +51,9 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
   const memberOf = lead ? (lead.list_ids?.split(',') ?? []) : defaultListId ? [defaultListId] : []
   const [fields, setFields] = useState<LeadFields>(lead ? toFields(lead) : EMPTY)
   const [selected, setSelected] = useState<Set<string>>(new Set(memberOf))
+  // One identity for the lifetime of this form, including transport retries.
+  const [saveId] = useState(() => lead?.id ?? crypto.randomUUID())
+  const pendingSave = useRef<{ request_id: string; payload: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'details' | 'conversation' | 'history'>('details')
@@ -147,27 +150,27 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
       setError('Tags and field names can be up to 40 characters.')
       return
     }
-    const tagsChanged = [...tags].map((t) => t.toLowerCase()).sort().join('\n') !== leadTags(lead ?? { tags: null }).map((t) => t.toLowerCase()).sort().join('\n')
-    const customJson = JSON.stringify(Object.fromEntries(custom))
-    const customChanged = customJson !== JSON.stringify(Object.fromEntries(leadCustomFields(lead ?? { custom_fields: null })))
-    const id = lead?.id ?? crypto.randomUUID()
-    const params: Record<string, unknown> = { id }
+    if (saving) return
+    const params: Record<string, unknown> = { id: saveId, mode: lead ? 'update' : 'create' }
     for (const [key, value] of Object.entries(fields)) params[key] = value.trim() || null
     if (lead) params.if_unchanged_since = baseUpdatedAt
-    const before = new Set(lead ? memberOf : [])
-    const listProject = (listId: string) => projectOf(lists.find((l) => l.id === listId) ?? { project_id: null })
+    const listParam = (id: string) => ({ id, project_id: projectOf(lists.find((l) => l.id === id) ?? { project_id: null }) })
+    params.lists = [...selected].map(listParam)
+    params.removed_lists = memberOf.filter((id) => !selected.has(id)).map(listParam)
+    params.tags = JSON.stringify(tags)
+    params.fields = JSON.stringify(Object.fromEntries(custom))
+    const payload = JSON.stringify(params)
+    if (!pendingSave.current || pendingSave.current.payload !== payload) {
+      pendingSave.current = { request_id: crypto.randomUUID(), payload }
+    }
+    const request = pendingSave.current
     run(async () => {
-      const { changes } = await x(lead ? 'update_lead' : 'create_lead', params)
-      // The actions refuse the whole write on a non-link social field or a duplicate email / profile link.
-      if (changes === 0) throw new Error(lead
-        ? 'Not saved. Either this lead was changed by someone else (for example an agent) since you opened it - close and reopen it to see the latest - or a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.'
-        : 'Not saved. Either a link is not a full https:// link, another lead already has this email or profile link, or the source no longer exists.')
-      await Promise.all([
-        ...[...selected].filter((l) => !before.has(l)).map((list_id) => x('add_lead_to_list', { lead_id: id, list_id, project_id: listProject(list_id) })),
-        ...[...before].filter((l) => !selected.has(l)).map((list_id) => x('remove_lead_from_list', { lead_id: id, list_id, project_id: listProject(list_id) })),
-      ])
-      if (tagsChanged) await x('set_lead_tags', { id, tags: JSON.stringify(tags) })
-      if (customChanged) await x('set_custom_fields', { id, fields: customJson, replace: true })
+      try {
+        const { changes } = await x('save_lead_form', request)
+        if (changes !== 1) throw new Error('Save was not confirmed.')
+      } catch {
+        throw new Error('Save could not be confirmed. Retry with the same values to safely finish. If it is still refused, close and reopen the lead to check for changes, duplicate email or profile links, and unavailable sources or lists.')
+      }
     })
   }
 

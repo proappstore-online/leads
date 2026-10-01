@@ -43,6 +43,10 @@
     {
       "name": "0011_legacy_project_membership_backfills",
       "sql": "CREATE TABLE IF NOT EXISTS legacy_project_membership_backfills (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL); CREATE UNIQUE INDEX IF NOT EXISTS idx_legacy_project_membership_backfills_pair ON legacy_project_membership_backfills (project_id, user_id)"
+    },
+    {
+      "name": "0012_atomic_lead_form_saves",
+      "sql": "CREATE TABLE IF NOT EXISTS lead_form_saves (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, payload TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, valid INTEGER NOT NULL CHECK (valid = 1), created_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS idx_lead_form_saves_user ON lead_form_saves (user_id)"
     }
   ]
 }
