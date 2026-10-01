@@ -417,6 +417,24 @@ ok(again.every((c) => c === 0), `the same code cannot be redeemed twice (${again
 ok(call('list_project_members', O, { project_id: P }).filter((m) => m.user_id === S).length === 1, 'the owner sees the new member exactly once')
 ok(call('get_project_invite', S, { code: CODE }).length === 0, 'a consumed code no longer resolves')
 
+// #51: preview grants no access; redemption must be followed by an access check.
+for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
+  const member = `join-51-${scenario}`
+  call('create_project_invite', O, { project_id: P })
+  const code = db.prepare('SELECT code FROM project_invites WHERE project_id = ? ORDER BY rowid DESC LIMIT 1').get(P).code
+  ok(call('get_project_invite', member, { code }).length === 1, `#51 ${scenario}: invite resolves before submit`)
+  if (scenario === 'revoked') call('revoke_project_invite', O, { code })
+  if (scenario === 'consumed') call('join_project', 'join-51-winner', { code })
+  if (scenario === 'expired') db.prepare('UPDATE project_invites SET expires_at = 0 WHERE code = ?').run(code)
+  call('join_project', member, { code })
+  ok(call('list_projects', member).some((p) => p.id === P) === (scenario === 'valid'),
+    `#51 ${scenario}: access check distinguishes success from zero-change redemption`)
+  if (scenario === 'valid') {
+    call('join_project', member, { code })
+    ok(call('list_projects', member).some((p) => p.id === P), '#51: retry of consumed code still confirms existing access')
+  }
+}
+
 // #36: the profile's display name renames only the caller's own project and membership rows.
 {
   const others = () => JSON.stringify(db.prepare('SELECT id, owner_name FROM projects WHERE user_id <> ? ORDER BY id').all(S))

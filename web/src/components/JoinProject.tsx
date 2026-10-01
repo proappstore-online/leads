@@ -35,12 +35,23 @@ export function JoinProject({ code, userName, onClose, onJoined }: {
   useEffect(() => { loadInvite() }, [code])
 
   async function join() {
+    if (!invite) return
+    const projectId = invite.project_id
     setSaving(true)
+    setError('')
     try {
       await x('join_project', { code, display_name: userName || null })
-      onJoined(invite!.project_id)
+      // A resolved batch can have changed zero rows if the invite became invalid.
+      // Verify access independently; this also confirms an already-completed retry.
+      const projects = await q<{ id: string }>('list_projects')
+      if (!projects.some((project) => project.id === projectId)) {
+        setInvite(null)
+        return
+      }
+      onJoined(projectId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    } finally {
       setSaving(false)
     }
   }

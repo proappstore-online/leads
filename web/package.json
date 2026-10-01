@@ -12,7 +12,8 @@
     "qa:sorting": "node qa/sorting.mjs",
     "qa:activity": "node qa/activity.mjs",
     "qa:stats": "node qa/stats.mjs",
-    "qa:save": "node qa/actions-client.mjs && node qa/save.mjs"
+    "qa:save": "node qa/actions-client.mjs && node qa/save.mjs",
+    "qa:join": "node qa/join.mjs"
   },
   "dependencies": {
     "@proappstore/sdk": "^1.16.45",
