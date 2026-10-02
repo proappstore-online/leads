@@ -107,17 +107,16 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
   const [range, setRange] = useState<RangeKey>('30d')
   const [sourceId, setSourceId] = useState('')
   const [listId, setListId] = useState('')
-  // Rows are kept with the buckets they were fetched for, so a new range never shows old numbers under new labels.
-  const [data, setData] = useState<{ pairs: [number, number][]; series: Bucket[]; totals: Bucket | null } | null>(null)
-  const [pipeline, setPipeline] = useState<Pipeline | null>(null)
+  // Timeline and pipeline share the complete request snapshot, including refreshes.
+  const [data, setData] = useState<{ snapshot: object; pairs: [number, number][]; series: Bucket[]; totals: Bucket | null; pipeline: Pipeline | null } | null>(null)
   const [feed, setFeed] = useState<Activity[]>([])
   const [feedMore, setFeedMore] = useState(false)
   const [dataLoading, setDataLoading] = useState(true)
   const [feedLoading, setFeedLoading] = useState(true)
-  const [dataError, setDataError] = useState('')
+  const [dataError, setDataError] = useState<{ snapshot: object; message: string } | null>(null)
   const [feedError, setFeedError] = useState('')
   /** The value whose leads are open in the popup. */
-  const [drill, setDrill] = useState<Drill | null>(null)
+  const [drill, setDrill] = useState<{ value: Drill; sourceId: string; listId: string; projectId: string | null } | null>(null)
 
   const { pairs, labels } = useMemo(() => buckets(range), [range])
   const names = useMemo<HistoryNames>(() => ({ people, sources }), [people, sources])
@@ -127,9 +126,12 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
     return { source_id: sourceId || null, list_id: list ? list.id : null, project_id: list ? projectOf(list) : projectId }
   }, [sourceId, listId, lists, projectId])
 
+  const snapshot = useMemo(() => ({ pairs, filters, version }), [pairs, filters, version])
+  const statsRequest = useRef(0)
   const loadStats = useCallback(async () => {
+    const id = ++statsRequest.current
     setDataLoading(true)
-    setDataError('')
+    setDataError(null)
     const whole: [number, number][] = [[pairs[0][0], pairs[pairs.length - 1][1]]]
     try {
       const [rows, total, pipe] = await Promise.all([
@@ -138,16 +140,19 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
         q<Bucket>('stats_timeline', { buckets: JSON.stringify(whole), ...filters }),
         q<Pipeline>('stats_pipeline', filters),
       ])
-      setData({ pairs, series: rows, totals: total[0] ?? null })
-      setPipeline(pipe[0] ?? null)
+      if (id !== statsRequest.current) return
+      setData({ snapshot, pairs, series: rows, totals: total[0] ?? null, pipeline: pipe[0] ?? null })
     } catch (e) {
-      setDataError(e instanceof Error ? e.message : String(e))
+      if (id === statsRequest.current) setDataError({ snapshot, message: e instanceof Error ? e.message : String(e) })
     } finally {
-      setDataLoading(false)
+      if (id === statsRequest.current) setDataLoading(false)
     }
-  }, [pairs, filters])
+  }, [pairs, filters, snapshot])
 
-  useEffect(() => { loadStats() }, [loadStats, version])
+  useEffect(() => {
+    loadStats()
+    return () => { ++statsRequest.current }
+  }, [loadStats])
 
   const feedRequest = useRef(0)
   const loadFeed = useCallback(async (last: Activity | null) => {
@@ -168,14 +173,16 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
 
   useEffect(() => { loadFeed(null) }, [loadFeed, version])
 
-  const current = data?.pairs === pairs ? data : null
+  const current = data?.snapshot === snapshot ? data : null
+  const pipeline = current?.pipeline ?? null
+  const currentError = dataError?.snapshot === snapshot ? dataError.message : ''
   const totals = current?.totals ?? null
   const col = (key: keyof Bucket) => current?.series.map((b) => b[key]) ?? []
   const selectClass = 'rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none'
 
   function open(next: Drill, opener: HTMLElement) {
     opener.focus() // Safari does not focus a clicked button; the popup hands focus back to whatever had it
-    setDrill(next)
+    setDrill({ value: next, sourceId, listId, projectId })
   }
   // The leads behind a count over [from, before): leads saved, replying or flagged in it.
   const period = (title: string, what: string, count: number, key: 'created' | 'replied' | 'flagged', [from, before]: [number, number], when: string): Drill => ({
@@ -224,7 +231,7 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
         </select>
       </div>
 
-      {dataError ? <div className="mt-4"><RetryState error={dataError} onRetry={loadStats} /></div> : dataLoading && !current ? <div className="mt-4"><LoadingState label="Loading statistics…" /></div> : <>
+      {currentError ? <div className="mt-4"><RetryState error={currentError} onRetry={loadStats} /></div> : dataLoading && !current ? <div className="mt-4"><LoadingState label="Loading statistics…" /></div> : <>
       <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {tiles.map(([label, value, d]) => (
           <div key={label} className={`relative rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 ${d ? 'hover:border-[var(--accent)]' : ''}`}>
@@ -331,10 +338,10 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
       </section>
       {drill && (
         <StatsLeads
-          drill={drill}
-          sourceId={sourceId}
-          listId={listId}
-          projectId={projectId}
+          drill={drill.value}
+          sourceId={drill.sourceId}
+          listId={drill.listId}
+          projectId={drill.projectId}
           lists={lists}
           projects={projects}
           people={people}
