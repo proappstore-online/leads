@@ -21,7 +21,12 @@ export async function q<T>(name: string, params: Record<string, unknown> = {}): 
 
 /** Call an execute action; resolves to the write metadata. */
 export async function x(name: string, params: Record<string, unknown> = {}): Promise<ActionMeta> {
-  const res = await app.actions.call<{ meta: ActionMeta; results?: { rows?: { completed?: number }[] }[] }>(name, params)
+  const res = await app.actions.call<{ meta: ActionMeta; results?: { meta?: ActionMeta; rows?: { completed?: number }[] }[] }>(name, params)
+  if (name === 'update_display_name') {
+    const meta = res.results?.[0]?.meta
+    if (meta?.changes !== 1) throw new Error('Name save was not confirmed.')
+    return meta
+  }
   if (name === 'save_lead_form') {
     // Batch actions return per-statement results, not a top-level meta.
     if (res.results?.at(-1)?.rows?.[0]?.completed !== 1) throw new Error('Save was not confirmed.')

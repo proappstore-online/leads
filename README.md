@@ -41,7 +41,7 @@ platform account deletion, contact support@proappstore.online.
 and a JSON `data` record. It is intentionally paged (1–200 records per call), so
 it is safe to use for a single owner without returning another owner's data or an
 unbounded database dump. The export includes caller-owned leads, lists, messages,
-sources, projects and relationship state, plus members and invites of projects the
+sources, projects, profile preferences and relationship state, plus members and invites of projects the
 caller owns. It does not include a membership in somebody else's project or any
 other owner’s records. Treat the file as sensitive: it includes lead content,
 project member names and invite codes.
@@ -53,7 +53,7 @@ for that section; repeat with `offset` increased by the number of non-null `data
 rows until it reaches `total`. An empty section returns one row with `data: null`.
 
 ```text
-leads, lists, memberships, messages, sources, projects,
+user_profiles, leads, lists, memberships, messages, sources, projects,
 project_memberships, project_invites, join_table_backfills, legacy_project_membership_backfills, lead_form_saves,
 legacy_lead_lists, legacy_project_members
 ```
