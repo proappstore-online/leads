@@ -670,6 +670,38 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
   }
 }
 
+// #47: deleting older messages must not move later appends ahead of survivors.
+{
+  const user = 'sequence-owner', lead = randomUUID()
+  call('create_lead', user, { id: lead, name: 'Sequence regression', country: 'AU' })
+  const message = (body) => ({ direction: 'out', occurred_at: 100, body })
+  const single = (body) => call('add_message', user, { id: randomUUID(), lead_id: lead, platform: 'Email', ...message(body) })
+  const bulk = (bodies) => call('add_messages', user, { lead_id: lead, platform: 'Email', messages: JSON.stringify(bodies.map(message)) })
+  const rows = () => call('list_messages', user, { lead_id: lead })
+  const sequences = () => db.prepare('SELECT seq FROM messages WHERE lead_id = ? ORDER BY seq').all(lead).map((r) => r.seq)
+  single('first'); single('second'); single('survivor')
+  for (const row of rows().slice(0, 2)) call('delete_message', user, { id: row.id })
+  const survivorSeq = sequences()[0]
+  single('single append')
+  ok(JSON.stringify(rows().map((r) => r.body)) === JSON.stringify(['survivor', 'single append']), '#47: single append follows survivor after older deletions')
+  ok(sequences()[1] === survivorSeq + 1, '#47: single append allocates maximum sequence plus one')
+  const beforeBulk = Math.max(...sequences())
+  ok(bulk(['single append', 'bulk one', 'survivor', 'bulk two']) === 2, '#47: bulk skips stored messages while appending new ones')
+  ok(JSON.stringify(rows().map((r) => r.body)) === JSON.stringify(['survivor', 'single append', 'bulk one', 'bulk two']), '#47: bulk append preserves equal-timestamp thread order after deletions')
+  ok(JSON.stringify(sequences().slice(-2)) === JSON.stringify([beforeBulk + 1, beforeBulk + 2]), '#47: bulk allocates consecutive sequences even when input contains duplicates')
+  // Legacy rows can share every ordering field; IDs make page boundaries deterministic.
+  const tieLead = randomUUID()
+  call('create_lead', user, { id: tieLead, name: 'Legacy ties', country: 'AU' })
+  for (const id of ['47-z', '47-a']) {
+    call('add_message', user, { id, lead_id: tieLead, platform: 'Email', ...message(id) })
+  }
+  db.prepare('UPDATE messages SET seq = 0, created_at = 1 WHERE lead_id = ?').run(tieLead)
+  const page = (offset) => call('list_messages', user, { lead_id: tieLead, limit: 1, offset })[0].id
+  ok(page(0) === '47-a' && page(1) === '47-z', '#47: legacy sequence ties have deterministic ID paging')
+  const snapshot = JSON.stringify(rows())
+  ok(bulk(['single append', 'bulk one', 'survivor', 'bulk two']) === 0 && JSON.stringify(rows()) === snapshot, '#47: bulk retry leaves sequence allocation unchanged')
+}
+
 // #48: deduplication counts occurrences independently for each resolved platform.
 {
   const user = 'bulk-platform-owner'
