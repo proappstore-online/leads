@@ -17,3 +17,12 @@ console.log('PASS  #42: missing completion evidence is never treated as a succes
 globalThis.actionReply = { meta: { changes: 0 } }
 assert.equal((await x('update_lead', {})).changes, 0)
 console.log('PASS  existing execute metadata remains available to callers')
+
+globalThis.actionReply = { results: [{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }] }
+assert.equal((await x('update_display_name', {})).changes, 1)
+console.log('PASS  #40: a profile-only save confirms persistence without projects')
+for (const reply of [{ results: [] }, { results: [{ meta: { changes: 0 } }, { meta: { changes: 1 } }] }, { meta: { changes: 1 } }]) {
+  globalThis.actionReply = reply
+  await assert.rejects(x('update_display_name', {}), /not confirmed/)
+}
+console.log('PASS  #40: missing profile persistence evidence never reports a successful save')
