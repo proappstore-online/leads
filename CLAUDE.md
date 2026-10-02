@@ -13,6 +13,18 @@ profiles, browsed through lists — one list per purpose or role.
 
 Platform conventions: https://proappstore.online/skills.md
 
+## Local git hooks
+
+After cloning, run:
+
+```sh
+bash scripts/install-hooks.sh
+```
+
+This installs pre-push checks matching CI: `check-typecheck.sh` and `check-actions.sh`. A failed check
+stops the push so it can be fixed locally. The installer respects `core.hooksPath`; rerun it after
+changing that setting. Hooks are optional (not load-bearing) — CI independently enforces everything.
+
 ## Data model (`migrations.json`)
 
 - `leads` — one row per contact. Social profiles (`linkedin`, `twitter`, `instagram`,
