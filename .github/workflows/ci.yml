@@ -21,6 +21,8 @@ jobs:
         run: pnpm --filter @leads/web exec playwright-core install --with-deps chromium
       - run: pnpm run prebuild
       - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test:unit
       # The manifest tests: every registered action in mcp.json run against a
       # real SQLite built from migrations.json (node:sqlite, Node 22), including
       # one cross-user negative per scoped action (PAS-DATA-022). CI stopped at

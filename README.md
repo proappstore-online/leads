@@ -6,6 +6,24 @@ Lead management on [ProAppStore](https://proappstore.online): one database of al
 - Dev: `pnpm install && pnpm dev`
 - Deploy: `git push origin main` - then `e2e/` smoke-tests the live app; see [VERIFICATION.md](VERIFICATION.md) for the deploy evidence and the human checklists
 
+## Local checks before committing
+
+`pnpm install` installs the Husky pre-commit hook automatically. Every commit runs
+`pnpm typecheck` (the full TypeScript project, with no emitted JavaScript), ESLint
+on staged JS/TS files through lint-staged, and `pnpm test:unit`. The fast unit
+subset covers the action response adapter, social URL validation, and timestamp
+helpers; it needs no browser, database, or deployed target. Typechecking runs once
+for the whole project because checking individual staged files misses cross-file
+errors and ignores project compiler settings. lint-staged temporarily hides unstaged
+changes in partially staged files while linting; typecheck and unit tests use the
+working tree.
+
+Run `pnpm precommit` to repeat the checks locally, or `pnpm lint` to lint all code.
+Full browser/SQL suites remain in `pnpm test` and CI. For a genuine emergency,
+`git commit --no-verify` skips the local hook; it does not bypass CI. Fix any skipped
+checks promptly. The optional `bash scripts/install-hooks.sh` pre-push checks remain
+available; rerun that installer after installing Husky to use both hooks.
+
 ## Data retention and deletion
 
 Leads holds personal data about third parties (the people you record as leads), so

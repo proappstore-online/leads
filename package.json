@@ -16,6 +16,20 @@
     "build": "pnpm --filter @leads/web build",
     "preview": "pnpm --filter @leads/web preview",
     "typecheck": "pnpm --filter @leads/web exec tsc -b",
-    "test": "pnpm --filter @leads/web exec tsc -b && node --no-warnings qa/actions.mjs && node --no-warnings qa/csp.mjs && pnpm --filter @leads/web qa:mobile && pnpm --filter @leads/web qa:sorting && pnpm --filter @leads/web qa:activity && pnpm --filter @leads/web qa:stats && pnpm --filter @leads/web qa:save && pnpm --filter @leads/web qa:join && pnpm --filter @leads/web exec node qa/socials.mjs && pnpm --filter @leads/web exec node qa/timestamps.mjs"
+    "test": "pnpm --filter @leads/web exec tsc -b && node --no-warnings qa/actions.mjs && node --no-warnings qa/csp.mjs && pnpm --filter @leads/web qa:mobile && pnpm --filter @leads/web qa:sorting && pnpm --filter @leads/web qa:activity && pnpm --filter @leads/web qa:stats && pnpm --filter @leads/web qa:save && pnpm --filter @leads/web qa:join && pnpm --filter @leads/web exec node qa/socials.mjs && pnpm --filter @leads/web exec node qa/timestamps.mjs",
+    "prepare": "husky",
+    "lint": "eslint . --max-warnings=0",
+    "test:unit": "pnpm --filter @leads/web test:unit",
+    "precommit": "pnpm typecheck && lint-staged && pnpm test:unit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "typescript-eslint": "^8.71.0"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,jsx,ts,tsx}": "eslint --max-warnings=0"
   }
 }
