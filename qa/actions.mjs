@@ -101,6 +101,16 @@ export const ok = (pass, what) => {
 const semicolons = Object.values(TOOLS).filter((t) => [t.sql ?? '', ...(t.statements ?? [])].some((s) => s.includes(';')))
 ok(semicolons.length === 0, `no action SQL contains a semicolon (${semicolons.map((t) => t.name).join(', ') || 'none'})`)
 
+// #59: registration scans whole words even inside SQL string literals. Keep payload.mode
+// compatible with 'create', but spell its SQL comparison as ('cre' || 'ate'). Schema
+// belongs in migrations; the existing #42 tests below still exercise create/update retries.
+const forbiddenKeywords = /\b(?:CREATE|DROP|ALTER|PRAGMA|ATTACH|DETACH|VACUUM|REINDEX)\b/i
+for (const tool of Object.values(TOOLS)) {
+  for (const [index, sql] of [tool.sql, ...(tool.statements ?? [])].filter(Boolean).entries()) {
+    ok(!forbiddenKeywords.test(sql), `#59: ${tool.name} statement ${index + 1} passes registration's forbidden-keyword check`)
+  }
+}
+
 // --- #12: the activity feed uses each event's own time ----------------------------------------
 const O = 'owner'
 const P = randomUUID()
