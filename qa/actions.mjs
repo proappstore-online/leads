@@ -108,6 +108,9 @@ const forbiddenKeywords = /\b(?:CREATE|DROP|ALTER|PRAGMA|ATTACH|DETACH|VACUUM|RE
 for (const tool of Object.values(TOOLS)) {
   for (const [index, sql] of [tool.sql, ...(tool.statements ?? [])].filter(Boolean).entries()) {
     ok(!forbiddenKeywords.test(sql), `#59: ${tool.name} statement ${index + 1} passes registration's forbidden-keyword check`)
+    if (tool.operation === 'batch') {
+      ok(/^(?:INSERT|UPDATE|DELETE)\b/i.test(sql.trim()), `#59: ${tool.name} statement ${index + 1} is a batch write`)
+    }
   }
 }
 
@@ -604,6 +607,11 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
     refused({ ...payload, country: 'XX' }, '#42: refused lead rolls back the entire save')
     const tool = TOOLS.save_lead_form
     const statements = tool.statements
+    const confirmation = () => {
+      const [sql, values] = bind(statements.at(-1), resolve(tool, { request_id: request, payload: JSON.stringify(payload) }), user)
+      return db.prepare(sql).all(...values)
+    }
+    ok(confirmation().length === 0, '#59: an absent receipt cannot confirm a form save')
     for (let stage = 1; stage <= statements.length; stage++) {
       const before = state()
       tool.statements = [...statements.slice(0, stage), "INSERT INTO leads (id) VALUES (:request_id)", ...statements.slice(stage)]
@@ -613,11 +621,13 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
     }
     tool.statements = statements
     save()
+    ok(confirmation()[0]?.completed === 1, '#59: the batch write returns completion evidence for the client')
     const committed = state()
     let identityConflict = false
     try { save(payload, randomUUID()) } catch { identityConflict = true }
     ok(identityConflict && state() === committed, '#42: a different request key cannot create the same form lead twice')
     save() // Simulate a committed request whose response was lost.
+    ok(confirmation()[0]?.completed === 1, '#59: a no-op retry still returns completion evidence')
     ok(state() === committed, '#42: create retry is a no-op, including history and memberships')
     ok(db.prepare('SELECT count(*) AS n FROM leads WHERE user_id = ?').get(user).n === 1, '#42: retry creates exactly one lead without email or profiles')
     refused({ ...payload, name: 'different' }, '#42: an idempotency key cannot be reused for another payload')
