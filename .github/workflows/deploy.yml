@@ -24,7 +24,7 @@ jobs:
       - name: Check for an E2E suite
         id: e2e-check
         run: echo "has_e2e=$([ -d e2e ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 22
