@@ -203,7 +203,8 @@ button:active {
 :root[data-text='sm'] { font-size: 87.5%; }
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+.row-openable:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--sky) 52%, white);
   outline-offset: 3px;
 }

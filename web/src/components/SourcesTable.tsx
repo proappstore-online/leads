@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import type { Source } from '../types'
 import { ExternalLink } from './ExternalLink'
 
@@ -11,12 +12,19 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
 }) {
   const num = 'px-4 py-3 text-right tabular-nums'
   const card = 'cursor-pointer rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm'
+  const openOnKey = (e: KeyboardEvent<HTMLElement>, open: () => void) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      open()
+    }
+  }
   return (
     <>
       {/* Phones: one card per source; the card opens the source, its link opens the group itself. */}
       <ul className="space-y-2 md:hidden">
         {sources.map((s) => (
-          <li key={s.id} onClick={() => onOpen(s.id)} className={card}>
+          <li key={s.id} tabIndex={0} onClick={() => onOpen(s.id)} onKeyDown={(e) => openOnKey(e, () => onOpen(s.id))} className={`row-openable ${card}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="break-words font-semibold text-[var(--ink)]">{s.name}</div>
@@ -37,7 +45,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
             </div>
           </li>
         ))}
-        <li onClick={() => onOpen('none')} className={`${card} flex justify-between italic text-[var(--muted)]`}>
+        <li tabIndex={0} onClick={() => onOpen('none')} onKeyDown={(e) => openOnKey(e, () => onOpen('none'))} className={`row-openable ${card} flex justify-between italic text-[var(--muted)]`}>
           <span>No source</span>
           <span className="font-semibold not-italic tabular-nums text-[var(--ink)]">{noSource} leads</span>
         </li>
@@ -60,7 +68,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
           </thead>
           <tbody>
             {sources.map((s) => (
-              <tr key={s.id} onClick={() => onOpen(s.id)} className="cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--panel-hover)]">
+              <tr key={s.id} tabIndex={0} onClick={() => onOpen(s.id)} onKeyDown={(e) => openOnKey(e, () => onOpen(s.id))} className="row-openable cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--panel-hover)]">
                 <td className="px-4 py-3">
                   <div className="font-semibold text-[var(--ink)]">
                     {s.url ? <span onClick={(e) => e.stopPropagation()}><ExternalLink href={s.url}>{s.name}</ExternalLink></span> : s.name}
@@ -83,7 +91,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
                 </td>
               </tr>
             ))}
-            <tr onClick={() => onOpen('none')} className="cursor-pointer hover:bg-[var(--panel-hover)]">
+            <tr tabIndex={0} onClick={() => onOpen('none')} onKeyDown={(e) => openOnKey(e, () => onOpen('none'))} className="row-openable cursor-pointer hover:bg-[var(--panel-hover)]">
               <td className="px-4 py-3 italic text-[var(--muted)]">No source</td>
               <td className={`${num} font-semibold text-[var(--ink)]`}>{noSource}</td>
               <td colSpan={8} />

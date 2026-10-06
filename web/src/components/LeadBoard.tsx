@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { useState } from 'react'
 import { isDue, leadTags } from '../lib/lead'
 import { STATUSES, type Lead } from '../types'
@@ -25,6 +26,14 @@ export function LeadBoard({ leads, people, onOpen, onMove }: {
     setOver(null)
   }
 
+  function openOnKey(e: KeyboardEvent<HTMLElement>, open: () => void) {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      open()
+    }
+  }
+
   return (
     <>
     {/* Touch screens cannot drag between columns. */}
@@ -49,11 +58,13 @@ export function LeadBoard({ leads, people, onOpen, onMove }: {
               {column.map((lead) => (
                 <li
                   key={lead.id}
+                  tabIndex={0}
                   draggable
                   onDragStart={(e) => { e.dataTransfer.setData('text/plain', lead.id); e.dataTransfer.effectAllowed = 'move'; setDragging(lead.id) }}
                   onDragEnd={() => { setDragging(null); setOver(null) }}
                   onClick={() => onOpen(lead)}
-                  className={`cursor-grab rounded-xl border bg-[var(--paper)] px-3 py-2.5 text-sm shadow-[var(--shadow-card)] active:cursor-grabbing ${dragging === lead.id ? 'opacity-40' : ''} ${lead.needs_attention ? 'border-[var(--warning)]' : 'border-[var(--line)]'}`}
+                  onKeyDown={(e) => openOnKey(e, () => onOpen(lead))}
+                  className={`row-openable cursor-grab rounded-xl border bg-[var(--paper)] px-3 py-2.5 text-sm shadow-[var(--shadow-card)] active:cursor-grabbing ${dragging === lead.id ? 'opacity-40' : ''} ${lead.needs_attention ? 'border-[var(--warning)]' : 'border-[var(--line)]'}`}
                 >
                   <div className="font-semibold text-[var(--ink)] [overflow-wrap:anywhere]">{lead.name}</div>
                   {lead.needs_attention ? <div className="text-xs font-semibold text-[var(--warning)]">Needs attention</div> : null}

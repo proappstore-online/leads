@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { countryName } from '../lib/countries'
 import { ExternalLink, linkClass } from './ExternalLink'
 import { wrapAnywhere } from './styles'
@@ -34,6 +35,13 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
       {isDue(lead) ? 'Due ' : ''}{date(lead.next_action_at)}
     </span>
   )
+  const openOnKey = (e: KeyboardEvent<HTMLElement>, open: () => void) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      open()
+    }
+  }
 
   /** Name, badges, role, country and where the lead was found — the same in both layouts. */
   const summary = (lead: Lead) => (
@@ -104,7 +112,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
         </div>
         <ul className="space-y-2">
           {leads.map((lead) => (
-            <li key={lead.id} onClick={() => onOpen(lead)} className={`cursor-pointer rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm ${lead.needs_attention ? attentionRow : ''}`}>
+            <li key={lead.id} tabIndex={0} onClick={() => onOpen(lead)} onKeyDown={(e) => openOnKey(e, () => onOpen(lead))} className={`row-openable cursor-pointer rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm ${lead.needs_attention ? attentionRow : ''}`}>
               {summary(lead)}
               {(lead.email || lead.phone) && (
                 <div className="mt-2 flex min-w-0 flex-col gap-1 text-sm" onClick={(e) => e.stopPropagation()}>
@@ -145,7 +153,7 @@ export function LeadTable({ leads, lists, projects, people, sort, onSort, onOpen
           </thead>
           <tbody>
             {leads.map((lead) => (
-              <tr key={lead.id} onClick={() => onOpen(lead)} className={`cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--panel-hover)] ${lead.needs_attention ? attentionRow : ''}`}>
+              <tr key={lead.id} tabIndex={0} onClick={() => onOpen(lead)} onKeyDown={(e) => openOnKey(e, () => onOpen(lead))} className={`row-openable cursor-pointer border-b border-[var(--line)] last:border-0 hover:bg-[var(--panel-hover)] ${lead.needs_attention ? attentionRow : ''}`}>
                 <td className="px-4 py-3">{summary(lead)}</td>
                 <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
                   {lead.email && <a href={`mailto:${lead.email}`} className={`block ${linkClass}`}>{lead.email}</a>}

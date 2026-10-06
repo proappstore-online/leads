@@ -87,6 +87,27 @@ async function check(page, where, width) {
   ok(smallTargets.length === 0, `${width}px ${where} — every visible control is at least 44×44px${smallTargets.length ? ` (${smallTargets[0].label}: ${smallTargets[0].width}×${smallTargets[0].height})` : ''}`)
 }
 
+async function keyboardOpen(page, row, label) {
+  await row.evaluate((el) => el.focus({ focusVisible: true }))
+  const accessible = await row.evaluate((el) => el.tabIndex === 0)
+  const focusVisible = await row.evaluate((el) => {
+    const style = getComputedStyle(el)
+    return style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) >= 2
+  })
+  ok(accessible, `${label} row is keyboard focusable`)
+  ok(focusVisible, `${label} row has a visible focus indicator`)
+  await page.keyboard.press('Enter')
+  await page.locator('[role=dialog]').waitFor()
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(100)
+  await row.evaluate((el) => el.focus({ focusVisible: true }))
+  await page.keyboard.press('Space')
+  await page.locator('[role=dialog]').waitFor()
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(100)
+  ok(true, `${label} row opens with Enter and Space`)
+}
+
 async function run(browser, width) {
   const page = await browser.newPage({ viewport: { width, height: 780 }, isMobile: true, hasTouch: true })
   const errors = []
@@ -100,6 +121,11 @@ async function run(browser, width) {
     : page.locator('tr').filter({ hasText: 'Alexandrina Montgomery-Wellington' }).first().click({ position: { x: 4, y: 4 } })
 
   await check(page, 'leads list', width)
+
+  const leadRow = width < 768
+    ? page.locator('li.row-openable').filter({ hasText: 'Alexandrina Montgomery-Wellington' }).first()
+    : page.locator('tr.row-openable').filter({ hasText: 'Alexandrina Montgomery-Wellington' }).first()
+  await keyboardOpen(page, leadRow, `${width}px lead`)
 
   await openLead()
   await page.locator('[role=dialog]').waitFor()
@@ -130,6 +156,17 @@ async function run(browser, width) {
 
   await nav.getByRole('button', { name: /^Sources/ }).click()
   await check(page, 'sources', width)
+  const sourceRow = width < 768
+    ? page.locator('li.row-openable').filter({ hasText: 'Jobs in Melbourne' }).first()
+    : page.locator('tr.row-openable').filter({ hasText: 'Jobs in Melbourne' }).first()
+  await keyboardOpen(page, sourceRow, `${width}px source`)
+  const edit = sourceRow.getByRole('button', { name: 'Edit', exact: true })
+  await edit.focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('heading', { name: 'Edit source' }).waitFor()
+  ok(!(await page.locator('[role=dialog]').getByText('Jobs in Melbourne', { exact: true }).count()), `${width}px nested Edit button does not open source details`)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(100)
   if (width < 768) await page.locator('li').filter({ hasText: 'Jobs in Melbourne' }).first().click({ position: { x: 4, y: 4 } })
   else await page.locator('tr').filter({ hasText: 'Jobs in Melbourne' }).first().click({ position: { x: 4, y: 4 } })
   await page.locator('[role=dialog]').waitFor()
@@ -154,6 +191,8 @@ async function run(browser, width) {
   await page.waitForTimeout(120)
   await page.getByRole('button', { name: 'board', exact: true }).click()
   await check(page, 'board', width)
+  const boardCard = page.locator('li.row-openable').filter({ hasText: 'Alexandrina Montgomery-Wellington' }).first()
+  await keyboardOpen(page, boardCard, `${width}px board lead`)
   await page.getByRole('button', { name: 'table', exact: true }).click()
 
   // A list with a very long name, opened from the sidebar, then its form.
