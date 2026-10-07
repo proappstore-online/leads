@@ -69,8 +69,10 @@ changing that setting. Hooks are optional (not load-bearing) — CI independentl
   checks it; actions that remove that path unassign).
 - The name collaborators see is `projects.owner_name` / `project_memberships.display_name`, copied
   from the account at create/join. The Profile page (`components/ProfilePage.tsx`, opened from the
-  account menu) sets both through `update_display_name`, and `get_display_name` returns it for later
-  creates and joins. The platform account itself (name, avatar) is read-only - there is no users table.
+  account menu) persists the preference in caller-owned `user_profiles` through `update_display_name`
+  and updates both copies atomically. `get_display_name` reads that profile with a legacy-copy fallback
+  until the first save. Creates and joins prefer the saved profile; deleting/leaving projects retains it.
+  Recovery exports and `delete_my_data` include the profile. The platform account itself (name, avatar) is read-only - there is no users table.
 
 The app works in one project at a time: the top-bar switcher (`App.tsx`, remembered under
 `leads.project`) sets it, and every query passes it as `project_id` - `list_lists`, `count_leads`,

@@ -308,6 +308,7 @@ const restored = new DatabaseSync(':memory:')
 for (const m of MIGRATIONS) restored.exec(m.sql)
 restored.exec(importSql(recoveryRows.map((record) => JSON.stringify(record)).join('\n')))
 const scopeWhere = {
+  user_profiles: 'user_id = ?',
   lead_form_saves: 'user_id = ?',
   leads: 'user_id = ?', lists: 'user_id = ?', memberships: 'user_id = ?', messages: 'user_id = ?', sources: 'user_id = ?', projects: 'user_id = ?', join_table_backfills: 'user_id = ?', legacy_lead_lists: 'user_id = ?',
   legacy_project_membership_backfills: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
@@ -454,7 +455,7 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
     + JSON.stringify(db.prepare('SELECT id, display_name FROM project_memberships WHERE user_id <> ? ORDER BY id').all(S))
   const before = others()
   const renamed = call('update_display_name', S, { display_name: '  Sam Stranger  ' })
-  ok(renamed[1] >= 1, `a member's rename reaches their memberships (${renamed.join(',')})`)
+  ok(renamed[2] >= 1, `a member's rename reaches their memberships (${renamed.join(',')})`)
   ok(call('list_project_members', O, { project_id: P }).find((m) => m.user_id === S)?.display_name === 'Sam Stranger', 'the owner sees the member\'s new name, trimmed')
   ok(call('get_display_name', S)[0]?.name === 'Sam Stranger', 'get_display_name returns the name just set')
   ok(others() === before, 'nobody else\'s project or membership name changed')
@@ -463,7 +464,7 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
     ok(refused.every((c) => c === 0) && call('get_display_name', S)[0]?.name === 'Sam Stranger', `a ${bad.trim() ? '81-character' : 'blank'} name changes nothing (${refused.join(',')})`)
   }
   const ownerRenamed = call('update_display_name', O, { display_name: 'Olivia' })
-  ok(ownerRenamed[0] >= 1 && call('list_projects', S).some((p) => p.id === P && p.owner_name === 'Olivia'), `a member sees the owner's new name on the shared project (${ownerRenamed.join(',')})`)
+  ok(ownerRenamed[1] >= 1 && call('list_projects', S).some((p) => p.id === P && p.owner_name === 'Olivia'), `a member sees the owner's new name on the shared project (${ownerRenamed.join(',')})`)
   ok(call('get_display_name', 'nobody-yet').length === 0, 'a user with no projects has no stored name')
 }
 
@@ -927,6 +928,49 @@ for (const [field, domains] of Object.entries({ linkedin: ['linkedin.com'], twit
   lead = make()
   remove(lead)
   ok(state(unrelated).assignee === member, '#39: removal never sweeps assignments on unrelated leads')
+}
+
+// #40: profile preferences persist independently of projects and memberships.
+{
+  const user = 'independent-profile', owner = 'profile-host'
+  const name = () => call('get_display_name', user)[0]?.name
+  call('update_display_name', user, { display_name: '  Persistent Name  ' })
+  ok(name() === 'Persistent Name', '#40: fresh user saves and reloads a trimmed name without projects')
+  for (const bad of ['', '   ', 'x'.repeat(81)]) {
+    const changes = call('update_display_name', user, { display_name: bad })
+    ok(changes.every((n) => n === 0) && name() === 'Persistent Name', '#40: invalid names cannot overwrite the preference')
+  }
+  const project = randomUUID()
+  call('create_project', user, { id: project, name: '#40 first project' })
+  ok(call('list_projects', user).find((p) => p.id === project)?.owner_name === 'Persistent Name', '#40: newly created project uses saved preference without supplied owner name')
+  call('delete_project', user, { id: project })
+  ok(name() === 'Persistent Name', '#40: deleting the final owned project retains the profile name')
+  const shared = randomUUID()
+  call('create_project', owner, { id: shared, name: '#40 shared' })
+  call('create_project_invite', owner, { project_id: shared })
+  call('join_project', user, { code: call('list_project_invites', owner, { project_id: shared })[0].code })
+  ok(call('list_project_members', owner, { project_id: shared }).find((m) => m.user_id === user)?.display_name === 'Persistent Name', '#40: joining uses saved preference without supplied display name')
+  call('update_display_name', user, { display_name: 'Updated Name' })
+  call('leave_project', user, { project_id: shared })
+  ok(name() === 'Updated Name', '#40: leaving the final project retains the updated preference')
+  ok(call('get_display_name', owner).length === 0, '#40: another user cannot read the saved preference')
+  call('delete_my_data', user, { confirm: 'wrong' })
+  ok(name() === 'Updated Name', '#40: refused account deletion retains the profile')
+  const exported = call('export_my_data', user, { section: 'user_profiles' })
+  ok(exported.length === 1 && JSON.parse(exported[0].data).display_name === 'Updated Name', '#40: caller-owned profile is exported for recovery')
+  ok(call('export_my_data', owner, { section: 'user_profiles' })[0].data === null, '#40: another caller cannot export this profile')
+  const restoredProfile = new DatabaseSync(':memory:')
+  for (const m of MIGRATIONS) restoredProfile.exec(m.sql)
+  restoredProfile.exec(importSql(exported.map((r) => JSON.stringify(r)).join('\n')))
+  ok(JSON.stringify(restoredProfile.prepare('SELECT * FROM user_profiles').get()) === JSON.stringify(db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(user)), '#40: profile recovery round-trip is lossless')
+  restoredProfile.close()
+  // Once saved, newer relationship copies must not override the independent preference.
+  call('create_project', user, { id: randomUUID(), name: '#40 stale copy', owner_name: 'stale supplied name' })
+  const stale = call('list_projects', user).find((p) => p.name === '#40 stale copy')
+  db.prepare('UPDATE projects SET owner_name = ?, created_at = ? WHERE id = ?').run('Stale copy', Date.now() + 1000, stale.id)
+  ok(name() === 'Updated Name', '#40: a newer relationship copy cannot override a saved preference')
+  call('delete_my_data', user, { confirm: 'DELETE MY DATA' })
+  ok(name() === undefined, '#40: confirmed account deletion removes the profile')
 }
 
 // #50: timestamps outside the JavaScript Date range are refused at every write, with no partial writes.
