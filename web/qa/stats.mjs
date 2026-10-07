@@ -240,6 +240,14 @@ try {
   await pipeline.waitFor()
   ok(await page.getByRole('button', { name: /^Leads added, last 7 days:/ }).count() === 1, '#43: range result restores snapshot-consistent tile drill-downs')
 
+  const shortenedChart = page.getByRole('group', { name: /^Leads added by period/ }).getByRole('button')
+  ok(await shortenedChart.count() === 7, '#45: shortening the range updates the chart to seven periods')
+  ok(await shortenedChart.evaluateAll((els) => els.filter((b) => b.tabIndex === 0).length) === 1,
+    '#45: shortening the range keeps exactly one chart tab stop')
+  await shortenedChart.last().focus()
+  await page.keyboard.press('ArrowLeft')
+  ok(/^Leads added, .+: \d+ leads?$/.test(await focused()), '#45: chart keyboard navigation still works after shortening the range')
+
   await browser.close()
 } finally {
   server.kill()

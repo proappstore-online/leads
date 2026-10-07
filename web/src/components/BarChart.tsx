@@ -35,6 +35,12 @@ export function BarChart({ title, labels, series, current, height = 170, onSelec
   const [hover, setHover] = useState<number | null>(null)
   /** The period button that holds the chart's single tab stop. */
   const [active, setActive] = useState(current ?? 0)
+  // A shorter range can remove the active period while React reuses this chart.
+  // Keep a valid tab stop in the same render as the new labels, then sync state.
+  const activeIndex = Math.min(active, Math.max(0, labels.length - 1))
+  useEffect(() => {
+    if (active !== activeIndex) setActive(activeIndex)
+  }, [active, activeIndex])
   const bars = useRef<(HTMLButtonElement | null)[]>([])
   // Drawn at the container's real width, so labels keep their size on a phone instead of shrinking with the chart.
   const box = useRef<HTMLDivElement>(null)
@@ -161,7 +167,7 @@ export function BarChart({ title, labels, series, current, height = 170, onSelec
                 ref={(el) => { bars.current[i] = el }}
                 type="button"
                 data-chart-bar=""
-                tabIndex={i === active ? 0 : -1}
+                tabIndex={i === activeIndex ? 0 : -1}
                 aria-label={valueName(i)}
                 onFocus={() => { setActive(i); setHover(i) }}
                 onBlur={() => setHover(null)}
