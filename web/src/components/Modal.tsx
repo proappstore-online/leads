@@ -5,7 +5,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
  * (and Escape) closes the top modal instead of leaving the app. Entries are reconciled once per tick,
  * so a modal closing while another opens - or React re-mounting one - never leaves history out of step.
  */
-const open: (() => void)[] = []
+const open: { close: () => void; dialog: () => HTMLDivElement | null }[] = []
 let owned = 0
 let ignorePops = 0
 let syncQueued = false
@@ -32,12 +32,12 @@ window.addEventListener('popstate', () => {
     ignorePops--
   } else if (owned > 0) {
     owned--
-    open.at(-1)?.()
+    open.at(-1)?.close()
   }
 })
 
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') open.at(-1)?.()
+  if (e.key === 'Escape') open.at(-1)?.close()
 })
 
 export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; /** Room for a lead table (#37). */ wide?: boolean }) {
@@ -49,7 +49,8 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
   useEffect(() => {
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const close = () => onCloseRef.current()
-    open.push(close)
+    const entry = { close, dialog: () => dialogRef.current }
+    open.push(entry)
     syncHistory()
     document.body.style.overflow = 'hidden'
     const focusDialog = () => {
@@ -61,7 +62,7 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
     const frame = requestAnimationFrame(focusDialog)
     return () => {
       cancelAnimationFrame(frame)
-      open.splice(open.indexOf(close), 1)
+      open.splice(open.indexOf(entry), 1)
       syncHistory()
       if (open.length === 0) document.body.style.overflow = ''
       // Only restore focus when this dialog owned it. A newly opened modal must
@@ -73,13 +74,20 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
   function trapTab(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key !== 'Tab') return
     const dialog = dialogRef.current
-    if (!dialog) return
-    const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    if (!dialog || open.at(-1)?.dialog() !== dialog) return
+    const focusable = [...dialog.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]')]
+      .filter((element) => {
+        if (element.matches(':disabled') || element.tabIndex < 0 || element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
+        const style = getComputedStyle(element)
+        return style.visibility !== 'hidden' && style.visibility !== 'collapse' && element.getClientRects().length > 0
+      })
     if (focusable.length === 0) { e.preventDefault(); dialog.focus(); return }
     const first = focusable[0]
     const last = focusable.at(-1)!
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    const activeIndex = focusable.indexOf(document.activeElement as HTMLElement)
+    if (activeIndex === -1) { e.preventDefault(); (e.shiftKey ? last : first).focus() }
+    else if (e.shiftKey && activeIndex === 0) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && activeIndex === focusable.length - 1) { e.preventDefault(); first.focus() }
   }
 
   return (

@@ -12,6 +12,7 @@
     "qa:sorting": "node qa/sorting.mjs",
     "qa:activity": "node qa/activity.mjs",
     "qa:stats": "node qa/stats.mjs",
+    "qa:modal": "node qa/modal.mjs",
     "qa:save": "node qa/actions-client.mjs && node qa/save.mjs",
     "qa:join": "node qa/join.mjs",
     "test:unit": "node qa/actions-client.mjs && node qa/socials.mjs && node qa/timestamps.mjs"
