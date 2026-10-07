@@ -43,20 +43,39 @@ export interface ActionMeta { changes: number }
 export const calls: [string, Record<string, unknown>][] = []
 ;(window as unknown as { calls: typeof calls }).calls = calls
 
+// Explicitly release stats requests to reproduce out-of-order responses without timing races.
+const pending: { source: unknown; resolve: () => void; reject: (e: Error) => void }[] = []
+const statsControl = {
+  hold: false,
+  pending: (source: unknown) => pending.filter((p) => p.source === source).length,
+  release: (source: unknown, error = '') => {
+    for (const p of pending.filter((p) => p.source === source)) {
+      pending.splice(pending.indexOf(p), 1)
+      if (error) p.reject(new Error(error))
+      else p.resolve()
+    }
+  },
+}
+;(window as unknown as { statsControl: typeof statsControl }).statsControl = statsControl
+
 export async function q<T>(name: string, params: Record<string, unknown> = {}): Promise<T[]> {
   calls.push([name, params])
+  if (statsControl.hold && (name === 'stats_timeline' || name === 'stats_pipeline')) {
+    await new Promise<void>((resolve, reject) => pending.push({ source: params.source_id, resolve, reject }))
+  }
+  const selected = params.source_id === 'none' ? LEADS.slice(0, 2) : LEADS
   switch (name) {
-    case 'list_leads': return LEADS.filter((l) => matches(l, params)).slice(Number(params.offset ?? 0), Number(params.offset ?? 0) + Number(params.limit ?? 100)) as T[]
+    case 'list_leads': return selected.filter((l) => matches(l, params)).slice(Number(params.offset ?? 0), Number(params.offset ?? 0) + Number(params.limit ?? 100)) as T[]
     case 'get_lead': return LEADS.filter((l) => l.id === params.id) as T[]
     case 'stats_timeline': return (JSON.parse(params.buckets as string) as [number, number][]).map(([from, before]) => ({
-      leads_added: LEADS.filter((l) => inRange(l.created_at, from, before)).length,
-      leads_replied: LEADS.filter((l) => inRange(l.last_reply_at, from, before)).length,
+      leads_added: selected.filter((l) => inRange(l.created_at, from, before)).length,
+      leads_replied: selected.filter((l) => inRange(l.last_reply_at, from, before)).length,
       messages_sent: 0, messages_received: 0, sources_added: 0, flagged: 0,
     })) as T[]
     case 'stats_pipeline': {
-      const count = (f: (l: L) => boolean) => LEADS.filter(f).length
+      const count = (f: (l: L) => boolean) => selected.filter(f).length
       return [{
-        total: LEADS.length,
+        total: selected.length,
         ...Object.fromEntries(['new', 'contacted', 'replied', 'qualified', 'won', 'lost'].map((s) => [`status_${s}`, count((l) => l.status === s)])),
         ...Object.fromEntries(['high', 'med', 'low'].map((f) => [`fit_${f}`, count((l) => l.fit === f)])),
         fit_none: count((l) => l.fit === null), with_conversation: 0, replied: count((l) => l.last_reply_at !== null), needs_attention: 0,
