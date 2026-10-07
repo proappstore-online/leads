@@ -161,7 +161,7 @@ ok(typeof copiedMember?.id === 'string' && copiedMember.id.length > 0 && copiedM
 ok(JSON.stringify(legacyBefore.lists) === JSON.stringify(db.prepare('SELECT * FROM lead_lists WHERE lead_id = ?').all(LEGACY_LEAD)) && JSON.stringify(legacyBefore.members) === JSON.stringify(db.prepare('SELECT * FROM project_members WHERE project_id = ? AND user_id = ?').all(P, LEGACY_MEMBER)), 'the backfill never mutates legacy rows')
 ok(call('list_leads', O, { list_id: L, project_id: P, limit: 50 }).some((lead) => lead.id === LEGACY_LEAD), 'runtime list reads use the backfilled stable-ID membership')
 ok(call('list_project_members', O, { project_id: P }).some((member) => member.user_id === LEGACY_MEMBER), 'runtime member reads use the backfilled stable-ID membership')
-ok(call('remove_lead_from_list', O, { lead_id: LEGACY_LEAD, list_id: L, project_id: P }) === 1, 'a backfilled membership can be removed normally')
+ok(call('remove_lead_from_list', O, { lead_id: LEGACY_LEAD, list_id: L, project_id: P })[0] === 1, 'a backfilled membership can be removed normally')
 const againBackfill = call('backfill_legacy_join_tables', O)
 ok(againBackfill.every((changes) => changes === 0), `the one-time backfill cannot resurrect a removed membership (${againBackfill.join(',')})`)
 ok(!call('list_leads', O, { list_id: L, project_id: P, limit: 50 }).some((lead) => lead.id === LEGACY_LEAD), 'legacy source rows do not override later membership removal')
@@ -834,6 +834,99 @@ for (const [field, domains] of Object.entries({ linkedin: ['linkedin.com'], twit
   ok(capped.length === 300 && capped[0].at === 1 && capped.at(-1).via === 'delete_source' && JSON.stringify(capped.at(-1).changes) === JSON.stringify({ source_id: [s1, null] }),
     '#52 delete_source records the cleared source and keeps the 300-entry cap')
   ok(changeIn(owner, l2, 'delete_source'), '#52 delete_source shows in history and recent activity')
+}
+
+// #39: removing the last eligible list revokes the assignment, not just its access path.
+{
+  const owner = 'remove-list-owner', member = 'remove-list-member'
+  const project = randomUUID(), otherProject = randomUUID(), list = randomUUID(), otherList = randomUUID()
+  call('create_project', owner, { id: project, name: '#39 eligible' })
+  call('create_project', owner, { id: otherProject, name: '#39 other' })
+  call('create_list', owner, { id: list, name: '#39 list', project_id: project })
+  call('create_list', owner, { id: otherList, name: '#39 other list', project_id: otherProject })
+  call('create_project_invite', owner, { project_id: project })
+  call('join_project', member, { code: call('list_project_invites', owner, { project_id: project })[0].code, display_name: 'Member' })
+  const make = (assignee = member) => {
+    const lead = randomUUID()
+    call('create_lead', owner, { id: lead, name: '#39 lead', country: 'AU' })
+    call('add_lead_to_list', owner, { lead_id: lead, list_id: list, project_id: project })
+    call('assign_lead', owner, { id: lead, user_id: assignee })
+    return lead
+  }
+  const state = (lead) => db.prepare('SELECT assigned_to_user_id AS assignee, history FROM leads WHERE id = ?').get(lead)
+  const remove = (lead, caller = owner, projectId = project, listId = list) => call('remove_lead_from_list', caller, { lead_id: lead, list_id: listId, project_id: projectId })
+  const membership = (lead) => db.prepare('SELECT count(*) AS n FROM lead_list_memberships WHERE lead_id = ? AND list_id = ?').get(lead, list).n
+  let lead = make()
+  const before = state(lead)
+  for (const [caller, projectId] of [[owner, otherProject], [member, project], ['stranger', project]]) {
+    remove(lead, caller, projectId)
+    ok(membership(lead) === 1 && JSON.stringify(state(lead)) === JSON.stringify(before), '#39: wrong project or caller changes neither membership nor assignment/history')
+  }
+  remove(lead, owner, project, otherList)
+  ok(JSON.stringify(state(lead)) === JSON.stringify(before), '#39: absent membership changes no assignment/history')
+  remove(lead)
+  ok(membership(lead) === 0 && state(lead).assignee === null, '#39: last eligible membership removal clears collaborator assignment')
+  const entry = JSON.parse(state(lead).history).at(-1)
+  ok(entry.via === 'remove_lead_from_list' && entry.by === owner && typeof entry.at === 'number' && JSON.stringify(entry.changes) === JSON.stringify({ assigned_to_user_id: [member, null] }), '#39: automatic unassignment records actor, time and old/new values')
+  ok(call('get_lead_history', owner, { id: lead })[0].via === 'remove_lead_from_list' && call('recent_activity', owner, {}).some((r) => r.lead_id === lead && r.kind === 'lead_changed'), '#39: unassignment appears in lead history and activity')
+  const removed = JSON.stringify(state(lead))
+  remove(lead)
+  ok(JSON.stringify(state(lead)) === removed, '#39: repeated removal adds no history')
+  call('add_lead_to_list', owner, { lead_id: lead, list_id: list, project_id: project })
+  ok(state(lead).assignee === null && call('get_lead', member, { id: lead }).length === 0, '#39: re-add does not restore collaborator access without reassignment')
+
+  lead = make('me')
+  const ownerState = JSON.stringify(state(lead))
+  remove(lead)
+  ok(JSON.stringify(state(lead)) === ownerState, '#39: owner self-assignment remains valid without lists')
+  lead = make(null)
+  const unassigned = JSON.stringify(state(lead))
+  remove(lead)
+  ok(JSON.stringify(state(lead)) === unassigned, '#39: unassigned lead adds no history')
+
+  const secondList = randomUUID()
+  call('create_list', owner, { id: secondList, name: '#39 second eligible list', project_id: project })
+  lead = make()
+  call('add_lead_to_list', owner, { lead_id: lead, list_id: secondList, project_id: project })
+  const reachable = JSON.stringify(state(lead))
+  remove(lead)
+  ok(JSON.stringify(state(lead)) === reachable, '#39: another eligible list preserves assignment and history')
+  remove(lead, owner, project, secondList)
+  ok(state(lead).assignee === null, '#39: removing final alternative eligible path clears assignment')
+
+  lead = make()
+  call('add_lead_to_list', owner, { lead_id: lead, list_id: otherList, project_id: otherProject })
+  remove(lead)
+  ok(state(lead).assignee === null, '#39: list in a project the assignee has not joined does not preserve assignment')
+
+  call('create_project_invite', owner, { project_id: otherProject })
+  call('join_project', member, { code: call('list_project_invites', owner, { project_id: otherProject })[0].code, display_name: 'Member' })
+  lead = make()
+  call('add_lead_to_list', owner, { lead_id: lead, list_id: otherList, project_id: otherProject })
+  const otherPath = JSON.stringify(state(lead))
+  remove(lead)
+  ok(JSON.stringify(state(lead)) === otherPath && call('get_lead', member, { id: lead }).length === 1, '#39: eligible path through another project preserves assignment and access')
+
+  lead = make()
+  const cappedHistory = JSON.stringify(Array.from({ length: 300 }, (_, at) => ({ at, by: owner, via: 'seed', changes: { status: ['new', 'new'] } })))
+  db.prepare('UPDATE leads SET history = ?, updated_at = 1 WHERE id = ?').run(cappedHistory, lead)
+  remove(lead)
+  const history = JSON.parse(state(lead).history)
+  ok(history.length === 300 && history[0].at === 1 && history.at(-1).via === 'remove_lead_from_list', '#39: unassignment keeps the 300-entry history cap')
+  ok(db.prepare('SELECT updated_at FROM leads WHERE id = ?').get(lead).updated_at > 1, '#39: automatic unassignment advances the lead conflict token')
+
+  lead = make()
+  // Force the history update to fail, verifying the preceding deletion rolls back too.
+  db.prepare('UPDATE leads SET history = ? WHERE id = ?').run('{', lead)
+  let failed = false
+  try { remove(lead) } catch { failed = true }
+  ok(failed && membership(lead) === 1 && state(lead).assignee === member, '#39: cleanup failure rolls back membership deletion and assignment together')
+  db.prepare('UPDATE leads SET history = NULL WHERE id = ?').run(lead)
+  const unrelated = lead
+  db.prepare('DELETE FROM lead_list_memberships WHERE lead_id = ?').run(unrelated)
+  lead = make()
+  remove(lead)
+  ok(state(unrelated).assignee === member, '#39: removal never sweeps assignments on unrelated leads')
 }
 
 // #50: timestamps outside the JavaScript Date range are refused at every write, with no partial writes.

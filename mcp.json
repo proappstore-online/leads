@@ -1392,9 +1392,8 @@
     },
     {
       "name": "remove_lead_from_list",
-      "description": "Take a lead out of a list. The lead stays in the database. \"changes\": 0 means the list is not in that project.",
-      "operation": "execute",
-      "sql": "DELETE FROM lead_list_memberships WHERE lead_id = :lead_id AND list_id = :list_id AND user_id = :__user_id AND EXISTS (SELECT 1 FROM lists lp WHERE lp.id = :list_id AND lp.user_id = :__user_id AND (lp.project_id = :project_id OR (:project_id = 'none' AND lp.project_id IS NULL)))",
+      "description": "Take a lead out of a list atomically. The lead stays in the database. Clear a collaborator assignment only if no eligible project path remains, keeping owner assignments and other valid list paths. Automatic unassignment is recorded in lead history. Returns per-statement results: results[0].meta.changes is memberships removed (0 for absent membership, wrong project or caller), results[1].meta.changes is assignments cleared.",
+      "operation": "batch",
       "params": {
         "lead_id": {
           "type": "string",
@@ -1409,7 +1408,11 @@
           "description": "Project the list belongs to (project_id from list_lists). 'none' for a list made before projects, that is in no project yet"
         }
       },
-      "requires_auth": true
+      "requires_auth": true,
+      "statements": [
+        "DELETE FROM lead_list_memberships WHERE lead_id = :lead_id AND list_id = :list_id AND user_id = :__user_id AND EXISTS (SELECT 1 FROM lists lp WHERE lp.id = :list_id AND lp.user_id = :__user_id AND (lp.project_id = :project_id OR (:project_id = 'none' AND lp.project_id IS NULL)))",
+        "UPDATE leads SET assigned_to_user_id = NULL, updated_at = :__now, history = json_insert(CASE WHEN json_array_length(COALESCE(leads.history, '[]')) >= 300 THEN json_remove(COALESCE(leads.history, '[]'), '$[0]') ELSE COALESCE(leads.history, '[]') END, '$[#]', json(json_object('at', :__now, 'by', :__user_id, 'via', 'remove_lead_from_list', 'changes', json(json_object('assigned_to_user_id', json_array(leads.assigned_to_user_id, NULL)))))) WHERE changes() > 0 AND id = :lead_id AND user_id = :__user_id AND assigned_to_user_id IS NOT NULL AND assigned_to_user_id <> :__user_id AND NOT EXISTS (SELECT 1 FROM lead_list_memberships ll JOIN lists li ON li.id = ll.list_id AND li.user_id = leads.user_id JOIN projects pr ON pr.id = li.project_id AND pr.user_id = leads.user_id JOIN project_memberships pm ON pm.project_id = pr.id AND pm.user_id = leads.assigned_to_user_id WHERE ll.lead_id = leads.id)"
+      ]
     },
     {
       "name": "list_messages",
