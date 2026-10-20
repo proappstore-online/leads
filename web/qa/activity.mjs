@@ -54,9 +54,15 @@ const { chromium } = await import('playwright-core')
 const port = await freePort()
 const URL_BASE = `http://localhost:${port}/`
 const server = spawn('npx', ['vite', '--config', here('./vite.config.ts'), '--port', String(port), '--strictPort'],
-  { cwd: here('..'), stdio: 'ignore', env: { ...process.env, QA_FIXTURES: './fixtures/actions-activity.ts' } })
+  { cwd: here('..'), stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, QA_FIXTURES: './fixtures/actions-activity.ts' } })
 process.on('exit', () => server.kill())
 
+// #72: a stall must say why. Keep what the dev server and the page reported, and print it on failure.
+const evidence = []
+const note = (line) => evidence.push(`${new Date().toISOString().slice(11, 23)} ${line}`)
+for (const stream of [server.stdout, server.stderr]) stream.on('data', (d) => String(d).split('\n').filter((l) => l.trim()).forEach((l) => note(`vite: ${l.trim()}`)))
+
+let page
 try {
   let up = false
   for (let i = 0; i < 60 && !up; i++) {
@@ -65,15 +71,27 @@ try {
   }
   if (!up) throw new Error(`the dev server did not start on ${URL_BASE}`)
   const browser = await chromium.launch({ executablePath: exe })
-  const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } })
-  page.on('pageerror', (e) => ok(false, `console error: ${e.message}`))
+  page = await browser.newPage({ viewport: { width: 1280, height: 1000 } })
+  // Fail in seconds, not 30 - the fixtures answer at once, so anything slower is a stall.
+  page.setDefaultTimeout(10_000)
+  page.on('pageerror', (e) => { note(`pageerror: ${e.message}`); ok(false, `console error: ${e.message}`) })
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') note(`console.${m.type()}: ${m.text()}`) })
+  page.on('requestfailed', (r) => note(`request failed: ${r.url()} ${r.failure()?.errorText ?? ''}`))
+  page.on('response', (r) => { if (r.status() >= 400) note(`HTTP ${r.status()}: ${r.url()}`) })
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) note(`navigated: ${f.url()}`) })
   await page.goto(URL_BASE)
-  await page.waitForSelector('main')
-  await page.locator('nav').getByRole('button', { name: 'Stats' }).click()
-  await page.waitForSelector('text=Recent activity')
-  await page.waitForTimeout(600)
+  // Wait for the nav to finish loading its lists, so the Stats chip no longer moves under the click.
+  const nav = page.getByRole('navigation', { name: 'Lead lists' })
+  await nav.getByRole('button', { name: /^All leads/ }).waitFor()
+  await nav.getByRole('status').waitFor({ state: 'detached' })
+  await nav.getByRole('button', { name: 'Stats' }).click()
+  await page.getByRole('heading', { name: 'Stats', level: 1 }).waitFor()
+  // The feed's own state, not a fixed text and a sleep: loaded, with its events rendered.
+  const feed = page.getByTestId('activity-feed')
+  await feed.and(page.locator('[aria-busy="false"]')).waitFor()
+  await feed.locator('ol li').first().waitFor()
 
-  const items = await page.$$eval('section:has(h2) ol li', (els) => els.map((li) => ({
+  const items = await feed.locator('ol li').evaluateAll((els) => els.map((li) => ({
     stamp: li.querySelector('time')?.getAttribute('datetime') ?? null,
     shown: li.querySelector('time')?.textContent.trim() ?? '',
     text: li.textContent.trim(),
@@ -100,9 +118,15 @@ try {
   ok(unknown && Date.parse(unknown.stamp) === stamps[stamps.length - 2], 'and it sits at the lead\'s creation, not at the top')
   await page.screenshot({ path: '/tmp/pw/12-activity.png' })
   await browser.close()
+} catch (error) {
+  ok(false, `the activity feed did not load: ${error.message.split('\n')[0]}`)
+  const shown = await page?.locator('main').first().innerText({ timeout: 1000 }).catch(() => null)
+  note(`on screen: ${shown?.replace(/\s+/g, ' ').slice(0, 600) ?? '(no main)'}`)
 } finally {
   server.kill()
 }
+
+if (failures) console.log(`\nWhat the dev server and page reported:\n${evidence.join('\n') || '(nothing)'}`)
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed')
 process.exit(failures ? 1 : 0)

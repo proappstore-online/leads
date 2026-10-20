@@ -35,7 +35,8 @@ function describe(e: Activity, names: HistoryNames): string {
 
 /**
  * Recent activity, newest first, each event at its own time (#12). Narrowed to the Stats page's
- * source filter and project, and reloaded when `version` is bumped.
+ * source filter and project, and reloaded when `version` is bumped. `aria-busy` (and the test id)
+ * says when a page of events is loading, for assistive tech and for qa:activity (#72).
  */
 export function ActivityFeed({ sourceId, projectId, version, people, sources, onOpenLead, onAddLead }: {
   /** A source id, 'none' for leads without one, or '' for every source. */
@@ -74,7 +75,7 @@ export function ActivityFeed({ sourceId, projectId, version, people, sources, on
   useEffect(() => { loadFeed(null) }, [loadFeed, version])
 
   return (
-    <section className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4">
+    <section data-testid="activity-feed" aria-busy={feedLoading} className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4">
       <h2 className="text-sm font-semibold text-[var(--ink)]">Recent activity</h2>
       <p className="text-xs text-[var(--muted)]">Newest first, each at the time it happened. Changes and notes start when the lead history was added; older edits are not listed.</p>
       {feedError ? <div className="mt-3"><RetryState error={feedError} onRetry={() => loadFeed(null)} /></div> : feedLoading && feed.length === 0 ? <div className="mt-3"><LoadingState label="Loading recent activity…" /></div> : feed.length === 0 ? (
