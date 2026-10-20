@@ -102,6 +102,10 @@ triggers, so rules are enforced by making the write match zero rows instead: a r
 returns `"changes": 0`. Every lead write checks links-only socials, `status`/`fit` vocabulary and
 no duplicate email / profile URL; message writes check `platform`/`direction`. The descriptions
 tell agents what `changes: 0` means and which tool explains it (`check_lead_links`, `find_lead`).
+A batch still resolves when its guard refuses it, so its top-level `changes` is gone and each
+statement reports its own. A batch that can refuse in a way the user needs to see must name the
+statement that does the work in `WORK_STATEMENT` (`web/src/lib/actions.ts`), so `x()` throws instead
+of reporting success.
 Params are bound once through a `FROM (SELECT :x AS x, …) AS p` subquery — D1 allows 100 binds.
 D1 also allows only 5 terms in one compound SELECT (`UNION ALL` ×4) - local SQLite allows 500, so
 `qa/actions.mjs` checks it (#13).
