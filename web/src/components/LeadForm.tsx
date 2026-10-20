@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react'
 import { q, x } from '../lib/actions'
 import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
-import { endOfToday, leadCustomFields, leadTags, projectOf, timeText, toInputValue } from '../lib/lead'
+import { leadCustomFields, leadTags, projectOf } from '../lib/lead'
 import { SOCIALS, isProfileLink } from '../lib/socials'
 import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Project, type ProjectMember, type Source } from '../types'
 import { Conversation } from './Conversation'
 import { LeadHistory } from './LeadHistory'
+import { LeadPanel, type SaveInPlace } from './LeadPanel'
 import { LeadView } from './LeadView'
 import { Modal } from './Modal'
-import { inputClass, wrapAnywhere } from './styles'
+import { inputClass } from './styles'
 
 
 const CONTACT: { key: keyof LeadFields; label: string; type?: string; placeholder?: string }[] = [
@@ -64,15 +65,8 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
   // Messages and flags save immediately, so closing after one must still refresh the table.
   const [savedInPlace, setSavedInPlace] = useState(false)
   const close = savedInPlace ? onSaved : onClose
-  const [attentionReason, setAttentionReason] = useState('')
-  const [attention, setAttention] = useState({ on: Boolean(lead?.needs_attention), reason: lead?.attention_reason ?? null, at: lead?.attention_at ?? null })
   /** updated_at as last read - saving is refused if the lead changed since (e.g. an agent edited it). */
   const [baseUpdatedAt, setBaseUpdatedAt] = useState(lead?.updated_at ?? null)
-  const [assignee, setAssignee] = useState(lead?.assigned_to_user_id ?? null)
-  const [status, setStatus] = useState(lead?.status ?? 'new')
-  const [followUp, setFollowUp] = useState({ at: lead?.next_action_at ?? null, action: lead?.next_action ?? null })
-  const [followAt, setFollowAt] = useState(lead?.next_action_at ? toInputValue(lead.next_action_at) : '')
-  const [followAction, setFollowAction] = useState(lead?.next_action ?? '')
   const [tagsText, setTagsText] = useState(lead ? leadTags(lead).join(', ') : '')
   const [customRows, setCustomRows] = useState<[string, string][]>(lead ? leadCustomFields(lead) : [])
   // Read the latest draft after the request, including edits made while it was pending.
@@ -81,9 +75,6 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
   // Someone else's lead assigned to you: status, flag and new messages only.
   const shared = Boolean(lead?.shared)
   const sharedIn = shared ? projects.find((p) => p.id === lead?.project_id) : undefined
-  // A lead can be assigned to members of the projects its lists belong to.
-  const leadProjects = new Set(memberOf.map((id) => lists.find((l) => l.id === id)?.project_id).filter(Boolean))
-  const assignable = [...new Map(members.filter((m) => leadProjects.has(m.project_id)).map((m) => [m.user_id, m])).values()]
 
   const set = (key: keyof LeadFields, value: string) => setFields((f) => ({ ...f, [key]: value }))
 
@@ -106,8 +97,11 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
     }
   }
 
-  /** Save one change without closing the form, then reconcile its server snapshot with unsaved edits. */
-  async function saveInPlace(action: string, params: Record<string, unknown>, refused: string): Promise<boolean> {
+  /**
+   * Save one change without closing the form (LeadPanel's flag, assignment, status and follow-up),
+   * then reconcile its server snapshot with unsaved edits.
+   */
+  const saveInPlace: SaveInPlace = async (action, params, refused) => {
     if (!lead) return false
     setSaving(true)
     try {
@@ -137,12 +131,6 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
         retainedDraft.current ||= dirty || listsDirty || tagsDirty || customDirty
         if (!retainedDraft.current) setBaseUpdatedAt(fresh.updated_at)
         setSnapshot(fresh)
-        setAttention({ on: Boolean(fresh.needs_attention), reason: fresh.attention_reason, at: fresh.attention_at })
-        setAssignee(fresh.assigned_to_user_id)
-        setStatus(fresh.status)
-        setFollowUp({ at: fresh.next_action_at, action: fresh.next_action })
-        setFollowAt(fresh.next_action_at ? toInputValue(fresh.next_action_at) : '')
-        setFollowAction(fresh.next_action ?? '')
       }
       setSavedInPlace(true)
       setError('')
@@ -154,10 +142,6 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
       setSaving(false)
     }
   }
-
-  const setFlag = (action: 'flag_needs_attention' | 'clear_needs_attention') =>
-    saveInPlace(action, action === 'flag_needs_attention' ? { reason: attentionReason.trim() } : {}, 'Not saved - this lead may have been deleted.')
-      .then((saved) => { if (saved) setAttentionReason('') })
 
   function save(e: React.FormEvent) {
     e.preventDefault()
@@ -235,67 +219,13 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
           ))}
         </div>
       )}
-      {lead && (attention.on ? (
-        <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--warning)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] px-4 py-3">
-          <div className="min-w-0 select-text">
-            <div className="text-xs font-bold uppercase tracking-wider text-[var(--warning)]">
-              Needs attention{attention.at ? ` · ${timeText(attention.at)}` : ''}
-            </div>
-            <p className={`mt-1 whitespace-pre-wrap text-sm text-[var(--ink)] ${wrapAnywhere}`}>{attention.reason}</p>
-          </div>
-          {!shared && <button type="button" disabled={saving} onClick={() => setFlag('clear_needs_attention')} className="shrink-0 rounded-xl bg-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--paper)] disabled:opacity-60">Mark handled</button>}
-        </div>
-      ) : (
-        <div className="mt-4 flex gap-2">
-          <input type="text" aria-label="Why this lead needs attention" value={attentionReason} onChange={(e) => setAttentionReason(e.target.value)} placeholder="Flag as needs attention — say why" className={`${inputClass} mt-0`} />
-          <button type="button" disabled={saving || !attentionReason.trim()} onClick={() => setFlag('flag_needs_attention')} className="shrink-0 rounded-xl border border-[var(--warning)] px-3 py-2 text-sm font-semibold text-[var(--warning)] disabled:opacity-40">Flag</button>
-        </div>
-      ))}
-      {lead && (shared ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span className={`text-[var(--muted)] ${wrapAnywhere}`}>Assigned to you{sharedIn ? ` in ${sharedIn.name}, shared by ${sharedIn.owner_name ?? 'its owner'}` : ' in a shared project'}</span>
-          <select aria-label="Status" value={status} disabled={saving} onChange={(e) => saveInPlace('set_lead_status', { status: e.target.value }, 'Not saved - this lead is no longer assigned to you.')} className={`${inputClass} mt-0 w-auto capitalize`}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-      ) : (
-        <label className="mt-3 flex items-center gap-3 text-sm">
-          <span className="shrink-0 font-medium text-[var(--ink)]">Assigned to</span>
-          <select
-            value={assignee === userId ? 'me' : assignee ?? ''}
-            disabled={saving}
-            onChange={(e) => saveInPlace('assign_lead', { user_id: e.target.value || null }, 'Not saved - that person is not a member of a project this lead\'s lists belong to.')}
-            className={`${inputClass} mt-0`}
-          >
-            <option value="">Nobody</option>
-            <option value="me">Me</option>
-            {assignable.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name ?? 'Unnamed member'}</option>)}
-            {assignee && assignee !== userId && !assignable.some((m) => m.user_id === assignee) && (
-              <option value={assignee}>{members.find((m) => m.user_id === assignee)?.display_name ?? 'Former member'} (not in this lead's projects)</option>
-            )}
-          </select>
-        </label>
-      ))}
-      {lead && !shared && leadProjects.size === 0 && <p className="mt-1 text-xs text-[var(--muted)]">To assign this lead to someone else, put it in a list of a project they joined.</p>}
-      {lead && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <span className="shrink-0 font-medium text-[var(--ink)]">
-            Follow up
-            {followUp.at !== null && followUp.at <= endOfToday() && <span className="ml-2 rounded-full bg-[var(--warning)] px-2 py-0.5 text-xs font-bold text-[var(--paper)]">{followUp.at <= Date.now() ? 'Due' : 'Today'}</span>}
-          </span>
-          {/* Phones: date and next action on their own lines, Save and Clear below. */}
-          <input type="datetime-local" aria-label="Follow-up date" value={followAt} onChange={(e) => setFollowAt(e.target.value)} className={`${inputClass} mt-0 sm:w-auto`} />
-          <input type="text" aria-label="Next action" value={followAction} onChange={(e) => setFollowAction(e.target.value)} placeholder="Next action, e.g. call about the demo" className={`${inputClass} mt-0 min-w-0 basis-full sm:flex-1 sm:basis-48`} />
-          <button type="button" disabled={saving || !followAt} onClick={() => saveInPlace('set_follow_up', { at: new Date(followAt).getTime(), action: followAction.trim() || null }, 'Not saved - this lead is no longer yours to work.')} className="rounded-xl border border-[var(--line-strong)] px-3 py-2 font-semibold text-[var(--ink)] disabled:opacity-40">Save</button>
-          {followUp.at !== null && <button type="button" disabled={saving} onClick={() => saveInPlace('set_follow_up', {}, 'Not saved - this lead is no longer yours to work.')} className="rounded-xl px-3 py-2 font-semibold text-[var(--muted)] hover:bg-[var(--line)]">Clear</button>}
-        </div>
-      )}
+      {snapshot && <LeadPanel lead={snapshot} lists={lists} members={members} userId={userId} shared={shared} sharedIn={sharedIn} saving={saving} onSave={saveInPlace} />}
       {lead && tab === 'conversation' && <Conversation lead={lead} readOnlyHistory={shared} onChanged={() => setSavedInPlace(true)} />}
       {lead && tab === 'history' && <LeadHistory lead={lead} people={people} sources={sources} onChanged={() => setSavedInPlace(true)} />}
       {lead && tab === 'details' && !editing && (
         <>
           {error && <p className="mt-4 text-sm text-[var(--error)]">{error}</p>}
-          <LeadView lead={{ ...snapshot!, status, next_action_at: followUp.at, next_action: followUp.action }} lists={lists} onEdit={shared ? undefined : () => setEditing(true)} />
+          <LeadView lead={snapshot!} lists={lists} onEdit={shared ? undefined : () => setEditing(true)} />
         </>
       )}
       <form onSubmit={save} hidden={tab !== 'details' || !editing} className="mt-4 space-y-5">
