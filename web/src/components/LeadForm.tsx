@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { q, x } from '../lib/actions'
 import { COUNTRY_OPTIONS, countryName } from '../lib/countries'
-import { endOfToday, leadCustomFields, leadTags, projectOf, toInputValue } from '../lib/lead'
+import { endOfToday, leadCustomFields, leadTags, projectOf, timeText, toInputValue } from '../lib/lead'
 import { SOCIALS, isProfileLink } from '../lib/socials'
 import { FITS, STATUSES, type Lead, type LeadFields, type LeadList, type Project, type ProjectMember, type Source } from '../types'
 import { Conversation } from './Conversation'
@@ -239,7 +239,7 @@ export function LeadForm({ lead, lists, sources, projects, members, people, user
         <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--warning)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] px-4 py-3">
           <div className="min-w-0 select-text">
             <div className="text-xs font-bold uppercase tracking-wider text-[var(--warning)]">
-              Needs attention{attention.at ? ` · ${new Date(attention.at).toLocaleString()}` : ''}
+              Needs attention{attention.at ? ` · ${timeText(attention.at)}` : ''}
             </div>
             <p className={`mt-1 whitespace-pre-wrap text-sm text-[var(--ink)] ${wrapAnywhere}`}>{attention.reason}</p>
           </div>

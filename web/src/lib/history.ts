@@ -1,4 +1,5 @@
 import type { Source } from '../types'
+import { timeText } from './lead'
 
 /** How a changed field is named in the lead history and the activity feed. */
 export const FIELD_LABELS: Record<string, string> = {
@@ -11,7 +12,7 @@ export const FIELD_LABELS: Record<string, string> = {
 
 export const fieldLabel = (field: string) => FIELD_LABELS[field] ?? field
 
-export const when = (ms: number) => new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+export const when = (ms: number) => timeText(ms, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 /** Names for the ids a change can hold. */
 export interface HistoryNames {

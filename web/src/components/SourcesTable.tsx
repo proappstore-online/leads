@@ -1,4 +1,5 @@
 import type { KeyboardEvent } from 'react'
+import { dayText } from '../lib/lead'
 import type { Source } from '../types'
 import { ExternalLink } from './ExternalLink'
 
@@ -85,7 +86,7 @@ export function SourcesTable({ sources, noSource, onOpen, onEdit }: {
                 <td className={`hidden sm:table-cell ${num}`}>{s.qualified}</td>
                 <td className={num}>{s.won}</td>
                 <td className={`hidden sm:table-cell ${num}`}>{s.high_fit}</td>
-                <td className="hidden px-4 py-3 text-xs text-[var(--muted)] md:table-cell">{s.last_found_at ? new Date(s.last_found_at).toLocaleDateString() : '—'}</td>
+                <td className="hidden px-4 py-3 text-xs text-[var(--muted)] md:table-cell">{s.last_found_at ? dayText(s.last_found_at) : '—'}</td>
                 <td className="px-4 py-3 text-right">
                   <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(s) }} className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--line)] hover:text-[var(--ink)]">Edit</button>
                 </td>

@@ -2,11 +2,11 @@ import type { KeyboardEvent } from 'react'
 import { countryName } from '../lib/countries'
 import { ExternalLink, linkClass } from './ExternalLink'
 import { wrapAnywhere } from './styles'
-import { isDue, leadTags } from '../lib/lead'
+import { dayText, isDue, leadTags } from '../lib/lead'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList, Project, Sort, SortKey } from '../types'
 
-const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
+const date = (ms: number | null) => (ms ? dayText(ms) : '—')
 
 const SORTS: [SortKey, string][] = [['name', 'Name'], ['email', 'Contact'], ['fit', 'Fit'], ['next_action', 'Follow-up'], ['last_contact', 'Last contact'], ['last_reply', 'Last reply'], ['updated', 'Recently changed'], ['status', 'Status']]
 

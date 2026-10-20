@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { q } from '../lib/actions'
+import { dayText } from '../lib/lead'
 import { STATUSES, type Lead, type SourceDetail } from '../types'
 import { ExternalLink } from './ExternalLink'
 import { Modal } from './Modal'
 import { wrapAnywhere } from './styles'
 import { EmptyState, LoadingState, RetryState } from './AsyncState'
 
-const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : '—')
+const date = (ms: number | null) => (ms ? dayText(ms) : '—')
 
 /** Everything about one source: its details, performance, pipeline and leads. */
 export function SourceDetails({ sourceId, projectId, version, onClose, onEdit, onOpenLead, onShowLeads }: {

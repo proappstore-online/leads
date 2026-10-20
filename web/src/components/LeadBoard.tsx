@@ -1,9 +1,9 @@
 import type { KeyboardEvent } from 'react'
 import { useState } from 'react'
-import { isDue, leadTags } from '../lib/lead'
+import { dayText, isDue, leadTags } from '../lib/lead'
 import { STATUSES, type Lead } from '../types'
 
-const date = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+const date = (ms: number) => dayText(ms, { day: 'numeric', month: 'short' })
 
 /**
  * Leads as a Kanban board, one column per status. Drag a card to another column (mouse), or use its

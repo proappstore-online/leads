@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { q, x } from '../lib/actions'
+import { dayText } from '../lib/lead'
 import type { Project, ProjectMember } from '../types'
 import { Modal } from './Modal'
 import { inputClass } from './styles'
@@ -179,7 +180,7 @@ export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, o
               {invites.map((i) => (
                 <li key={i.code} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--line)] px-3 py-2 text-xs">
                   <span className="min-w-0 flex-1 select-text break-all text-[var(--ink)]">{inviteLink(i.code)}</span>
-                  <span className="text-[var(--muted)]">until {new Date(i.expires_at).toLocaleDateString()}</span>
+                  <span className="text-[var(--muted)]">until {dayText(i.expires_at)}</span>
                   <button type="button" onClick={() => copy(i.code)} className="rounded-lg px-2 py-1 font-semibold text-[var(--accent)] hover:bg-[var(--line)]">{copied === i.code ? 'Copied' : 'Copy'}</button>
                   <button type="button" onClick={() => revoke(i.code)} disabled={saving} className="rounded-lg px-2 py-1 font-semibold text-[var(--muted)] hover:bg-[var(--line)]">Cancel</button>
                 </li>

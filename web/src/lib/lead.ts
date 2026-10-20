@@ -31,6 +31,9 @@ export const isoTime = (ms: unknown): string | undefined => (isValidTime(ms) ? n
 /** A time as people read it, or "Unknown time" for a value that isn't one. Never throws. */
 export const timeText = (ms: unknown, options?: Intl.DateTimeFormatOptions): string => (isValidTime(ms) ? new Date(ms).toLocaleString(undefined, options) : 'Unknown time')
 
+/** A date as people read it, or "Unknown date" for a value that isn't one. Never throws (#50). */
+export const dayText = (ms: unknown, options?: Intl.DateTimeFormatOptions): string => (isValidTime(ms) ? new Date(ms).toLocaleDateString(undefined, options) : 'Unknown date')
+
 /** Epoch ms → the local `YYYY-MM-DDTHH:mm` a datetime-local input expects; '' (an empty input) for a time that can't be shown. */
 export function toInputValue(ms: number): string {
   if (!isValidTime(ms)) return ''

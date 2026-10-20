@@ -2,11 +2,11 @@ import type { ReactNode } from 'react'
 import { countryName } from '../lib/countries'
 import { ExternalLink, linkClass } from './ExternalLink'
 import { wrapAnywhere } from './styles'
-import { isDue, leadCustomFields, leadTags } from '../lib/lead'
+import { isDue, leadCustomFields, leadTags, timeText } from '../lib/lead'
 import { SOCIALS, isProfileLink, websiteUrl } from '../lib/socials'
 import type { Lead, LeadList } from '../types'
 
-const date = (ms: number | null) => (ms ? new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null)
+const date = (ms: number | null) => (ms ? timeText(ms, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null)
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
