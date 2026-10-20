@@ -15,7 +15,7 @@
     "qa:modal": "node qa/modal.mjs",
     "qa:save": "node qa/actions-client.mjs && node qa/save.mjs",
     "qa:join": "node qa/join.mjs",
-    "test:unit": "node qa/actions-client.mjs && node qa/socials.mjs && node qa/timestamps.mjs && node qa/stored.mjs"
+    "test:unit": "node qa/actions-client.mjs && node qa/socials.mjs && node qa/timestamps.mjs && node qa/stored.mjs && node qa/buckets.mjs"
   },
   "dependencies": {
     "@proappstore/sdk": "^1.16.45",

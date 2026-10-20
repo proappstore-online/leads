@@ -1,88 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { q } from '../lib/actions'
-import { summariseChanges, type HistoryNames } from '../lib/history'
-import { isoTime, projectOf, timeText } from '../lib/lead'
+import { projectOf } from '../lib/lead'
+import { buckets, RANGES, type Bucket, type Pipeline, type RangeKey } from '../lib/stats'
 import { FITS, STATUSES, type LeadList, type Project, type ProjectMember, type Source } from '../types'
+import { ActivityFeed } from './ActivityFeed'
 import { BarChart } from './BarChart'
-import { EmptyState, LoadingState, RetryState } from './AsyncState'
+import { LoadingState, RetryState } from './AsyncState'
 import { StatsLeads, type Drill } from './StatsLeads'
-
-interface Bucket {
-  leads_added: number
-  messages_sent: number
-  messages_received: number
-  leads_replied: number
-  sources_added: number
-  flagged: number
-}
-
-type Pipeline = Record<string, number>
-
-interface Activity {
-  kind: 'lead_added' | 'lead_changed' | 'lead_note' | 'messages_recorded' | 'flagged' | 'source_added'
-  /** When the event happened, not when its lead was last touched. */
-  at: number
-  /** 0 when that time was never recorded and `at` falls back to the lead's creation. */
-  at_known: number
-  lead_id: string | null
-  lead_name: string | null
-  source_name: string | null
-  /** For lead_changed a JSON object of field: [old, new]; for lead_note the note. */
-  detail: string | null
-  /** Tie-breaker for paging events that share a timestamp. */
-  k: string
-}
-
-const RANGES = {
-  '7d': { label: 'Last 7 days', unit: 'day', count: 7 },
-  '30d': { label: 'Last 30 days', unit: 'day', count: 30 },
-  '90d': { label: 'Last 13 weeks', unit: 'week', count: 13 },
-  '12m': { label: 'Last 12 months', unit: 'month', count: 12 },
-} as const
-type RangeKey = keyof typeof RANGES
-
-/** [start, end) pairs in local time, oldest first, ending with the current day / week / month. */
-function buckets(range: RangeKey): { pairs: [number, number][]; labels: string[] } {
-  const { unit, count } = RANGES[range]
-  const now = new Date()
-  const pairs: [number, number][] = []
-  const labels: string[] = []
-  for (let i = count - 1; i >= 0; i--) {
-    let start: Date
-    let end: Date
-    if (unit === 'day') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
-      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1)
-      labels.push(start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }))
-    } else if (unit === 'week') {
-      const monday = now.getDate() - ((now.getDay() + 6) % 7)
-      start = new Date(now.getFullYear(), now.getMonth(), monday - i * 7)
-      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
-      labels.push(start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }))
-    } else {
-      start = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      end = new Date(start.getFullYear(), start.getMonth() + 1, 1)
-      labels.push(start.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }))
-    }
-    pairs.push([start.getTime(), end.getTime()])
-  }
-  // The last bucket is always the current one.
-  labels[labels.length - 1] = unit === 'day' ? 'Today' : unit === 'week' ? 'This week' : 'This month'
-  return { pairs, labels }
-}
-
-const FEED_PAGE = 50
-
-function describe(e: Activity, names: HistoryNames): string {
-  switch (e.kind) {
-    case 'lead_added': return `Added lead${e.detail ? ` — ${e.detail}` : ''}`
-    case 'lead_changed': return summariseChanges(e.detail, names)
-    case 'lead_note': return `Note — ${e.detail ?? ''}`
-    case 'messages_recorded': return `Recorded ${e.detail?.replace(/^(\d+)/, '$1 messages')}`
-    case 'flagged': return `Flagged for attention — ${e.detail ?? ''}`
-    case 'source_added': return `Added source (${e.detail})`
-  }
-}
 
 /**
  * Charts and activity: what came in, what agents did, and where the pipeline stands. Every value that
@@ -109,17 +33,12 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
   const [listId, setListId] = useState('')
   // Timeline and pipeline share the complete request snapshot, including refreshes.
   const [data, setData] = useState<{ snapshot: object; pairs: [number, number][]; series: Bucket[]; totals: Bucket | null; pipeline: Pipeline | null } | null>(null)
-  const [feed, setFeed] = useState<Activity[]>([])
-  const [feedMore, setFeedMore] = useState(false)
   const [dataLoading, setDataLoading] = useState(true)
-  const [feedLoading, setFeedLoading] = useState(true)
   const [dataError, setDataError] = useState<{ snapshot: object; message: string } | null>(null)
-  const [feedError, setFeedError] = useState('')
   /** The value whose leads are open in the popup. */
   const [drill, setDrill] = useState<{ value: Drill; sourceId: string; listId: string; projectId: string | null } | null>(null)
 
   const { pairs, labels } = useMemo(() => buckets(range), [range])
-  const names = useMemo<HistoryNames>(() => ({ people, sources }), [people, sources])
   // A list is addressed by its project (#4).
   const filters = useMemo(() => {
     const list = lists.find((l) => l.id === listId)
@@ -153,25 +72,6 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
     loadStats()
     return () => { ++statsRequest.current }
   }, [loadStats])
-
-  const feedRequest = useRef(0)
-  const loadFeed = useCallback(async (last: Activity | null) => {
-    const id = ++feedRequest.current
-    setFeedLoading(true)
-    setFeedError('')
-    try {
-      const rows = await q<Activity>('recent_activity', { limit: FEED_PAGE, before: last?.at ?? null, before_k: last?.k ?? null, source_id: sourceId || null, project_id: projectId })
-      if (id !== feedRequest.current) return // a newer request (other filter) superseded this one
-      setFeed((prev) => (last ? [...prev, ...rows] : rows))
-      setFeedMore(rows.length === FEED_PAGE)
-    } catch (e) {
-      if (id === feedRequest.current) setFeedError(e instanceof Error ? e.message : String(e))
-    } finally {
-      if (id === feedRequest.current) setFeedLoading(false)
-    }
-  }, [sourceId, projectId])
-
-  useEffect(() => { loadFeed(null) }, [loadFeed, version])
 
   const current = data?.snapshot === snapshot ? data : null
   const pipeline = current?.pipeline ?? null
@@ -302,40 +202,7 @@ export function StatsPage({ lists, projects, sources, assignees, tags, people, p
       )}
       </>}
 
-      <section className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">Recent activity</h2>
-        <p className="text-xs text-[var(--muted)]">Newest first, each at the time it happened. Changes and notes start when the lead history was added; older edits are not listed.</p>
-        {feedError ? <div className="mt-3"><RetryState error={feedError} onRetry={() => loadFeed(null)} /></div> : feedLoading && feed.length === 0 ? <div className="mt-3"><LoadingState label="Loading recent activity…" /></div> : feed.length === 0 ? (
-          <EmptyState action={<button type="button" onClick={onAddLead} className="rounded-xl bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--paper)]">Add lead</button>}>No activity yet. Add a lead, source, note or message to start the timeline.</EmptyState>
-        ) : (
-          <ol className="mt-2 divide-y divide-[var(--line)]">
-            {feed.map((e) => (
-              <li key={e.k + e.at} className="flex flex-col gap-0.5 py-2 text-sm sm:flex-row sm:gap-3">
-                <time
-                  dateTime={isoTime(e.at)}
-                  title={e.at_known === 0 ? 'The time of this one was never recorded — shown at the lead\'s creation' : undefined}
-                  className="shrink-0 text-xs tabular-nums text-[var(--muted)] sm:w-28"
-                >
-                  {timeText(e.at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  {e.at_known === 0 && <span className="block not-italic opacity-80">time not recorded</span>}
-                </time>
-                <div className="min-w-0 select-text [overflow-wrap:anywhere]">
-                  {e.lead_id ? (
-                    <button type="button" onClick={() => onOpenLead(e.lead_id!)} className={`text-left font-semibold hover:underline ${e.kind === 'flagged' ? 'text-[var(--warning)]' : 'text-[var(--ink)]'}`}>{e.lead_name}</button>
-                  ) : (
-                    <span className="font-semibold text-[var(--ink)]">{e.source_name}</span>
-                  )}
-                  <span className="text-[var(--muted)]"> · {describe(e, names)}</span>
-                  {e.lead_id && e.source_name && <span className="block truncate text-xs text-[var(--muted)]">from {e.source_name}</span>}
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-        {feedMore && (
-          <button type="button" onClick={() => loadFeed(feed[feed.length - 1])} className="mt-2 w-full rounded-xl border border-[var(--line-strong)] py-2 text-sm font-semibold text-[var(--ink)]">Load older activity</button>
-        )}
-      </section>
+      <ActivityFeed sourceId={sourceId} projectId={projectId} version={version} people={people} sources={sources} onOpenLead={onOpenLead} onAddLead={onAddLead} />
       {drill && (
         <StatsLeads
           drill={drill.value}
