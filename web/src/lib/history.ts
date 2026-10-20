@@ -1,5 +1,5 @@
 import type { Source } from '../types'
-import { timeText } from './lead'
+import { parseChanges, timeText } from './lead'
 
 /** How a changed field is named in the lead history and the activity feed. */
 export const FIELD_LABELS: Record<string, string> = {
@@ -36,14 +36,7 @@ export function formatValue(field: string, value: unknown, names: HistoryNames =
 
 /** A change set on one line: `Status: new → contacted · Fit: — → high`. */
 export function summariseChanges(changes: string | null, names: HistoryNames = {}, max = 60): string {
-  if (!changes) return 'Changed'
-  let parsed: Record<string, [unknown, unknown]>
-  try {
-    parsed = JSON.parse(changes) as Record<string, [unknown, unknown]>
-  } catch {
-    return 'Changed'
-  }
-  const parts = Object.entries(parsed).map(([field, [from, to]]) => (
+  const parts = parseChanges(changes).map(([field, [from, to]]) => (
     field === 'notes'
       ? 'Notes edited'
       : `${fieldLabel(field)}: ${formatValue(field, from, names, max)} → ${formatValue(field, to, names, max)}`

@@ -1,13 +1,33 @@
 import type { Lead } from '../types'
 
+/** A stored JSON column, or null when it is empty or unreadable. Never throws: a bad value must not break the lead (#50). */
+function readJson(text: string | null): unknown {
+  if (!text) return null
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
+  }
+}
+
 /** The lead's tags (stored as a JSON array). */
 export function leadTags(lead: Pick<Lead, 'tags'>): string[] {
-  return lead.tags ? (JSON.parse(lead.tags) as string[]) : []
+  const tags = readJson(lead.tags)
+  return Array.isArray(tags) ? tags.filter((t): t is string => typeof t === 'string') : []
 }
 
 /** The lead's own fields (stored as a JSON object), values as text. */
 export function leadCustomFields(lead: Pick<Lead, 'custom_fields'>): [string, string][] {
-  return lead.custom_fields ? Object.entries(JSON.parse(lead.custom_fields) as Record<string, string | number>).map(([k, v]) => [k, String(v)]) : []
+  const fields = readJson(lead.custom_fields)
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return []
+  return Object.entries(fields).map(([k, v]): [string, string] => [k, String(v)])
+}
+
+/** The [from, to] pairs of one history entry's changes; [] when the stored text is unreadable. */
+export function parseChanges(changes: string | null): [string, [unknown, unknown]][] {
+  const parsed = readJson(changes)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return []
+  return Object.entries(parsed).filter((entry): entry is [string, [unknown, unknown]] => Array.isArray(entry[1]) && entry[1].length === 2)
 }
 
 /** A follow-up whose time has come. */

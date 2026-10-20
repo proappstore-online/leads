@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { q, x } from '../lib/actions'
 import { fieldLabel, formatValue, when } from '../lib/history'
+import { parseChanges } from '../lib/lead'
 import type { HistoryEntry, Lead, Source } from '../types'
 import { inputClass } from './styles'
 import { EmptyState, LoadingState, RetryState } from './AsyncState'
@@ -66,7 +67,7 @@ export function LeadHistory({ lead, people, sources, onChanged }: {
       ) : (
         <ol className="space-y-3 border-l-2 border-[var(--line)] pl-4">
           {entries.map((h) => {
-            const changes = h.changes ? Object.entries(JSON.parse(h.changes) as Record<string, [unknown, unknown]>) : []
+            const changes = parseChanges(h.changes)
             return (
               <li key={h.seq} className="text-sm">
                 <div className="text-xs text-[var(--muted)]">{when(h.at)} · {people.get(h.by_user_id) ?? 'Owner'}</div>
