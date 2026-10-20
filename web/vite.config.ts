@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Platform compliance checks for this custom field (not a W3C standard), so it is outside the typed manifest.
+const platformManifestFields: Record<string, unknown> = { min_viewport_width: 360 }
+
 export default defineConfig({
   plugins: [
     react(),
@@ -44,9 +47,7 @@ export default defineConfig({
         background_color: '#fffaf7',
         theme_color: '#000000',
         orientation: 'any',
-        // Platform compliance checks for this custom field (not a W3C standard).
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...({ min_viewport_width: 360 } as any),
+        ...platformManifestFields,
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
