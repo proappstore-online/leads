@@ -1,4 +1,4 @@
-/** Issue #42: the real lead form safely retries uncertain saves. */
+/** Issues #42 and #70: the real lead, list and project forms safely retry uncertain saves. */
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
@@ -124,6 +124,37 @@ try {
   await form.getByRole('button', { name: 'Save', exact: true }).click()
   const dirty = JSON.parse((await saves()).at(-1)[1].payload)
   ok(dirty.if_unchanged_since !== 3 && dirty.company === 'My unsaved company', '#41: retained edits keep their original conflict token')
+
+  // #70: a new list in a new project, retried after a lost response, is the same request.
+  // Let the last lead save settle, then close the form if it is still open.
+  await Promise.race([dialog.waitFor({ state: 'detached' }), dialog.getByText(/Save could not be confirmed/).waitFor()])
+  if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const listSaves = () => page.evaluate(() => window.calls.filter(([name]) => ['save_list_form', 'create_project', 'create_list'].includes(name)))
+  await page.getByRole('button', { name: '+ New list', exact: true }).click()
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Retry list')
+  // The label wraps the select, so its accessible name includes the selected project.
+  await form.locator('select').selectOption('__new')
+  await form.getByLabel('New project name').fill('Retry project')
+  await form.getByRole('button', { name: 'Save', exact: true }).click()
+  await form.getByText(/Save could not be confirmed/).waitFor()
+  await form.getByRole('button', { name: 'Save', exact: true }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const listCalls = await listSaves()
+  ok(listCalls.length === 2 && listCalls.every(([name]) => name === 'save_list_form'), '#70: a new list and project are one transactional action per attempt')
+  ok(JSON.stringify(listCalls[0]?.[1]) === JSON.stringify(listCalls[1]?.[1]), '#70: the retry replays the same request id, list id and project id')
+  const listPayload = JSON.parse(listCalls[0][1].payload)
+  ok(listPayload.name === 'Retry list' && listPayload.new_project?.name === 'Retry project' && listPayload.project_id && listPayload.id, '#70: the request carries the list and its new project')
+
+  // The project form keeps its id, so a retry replays the same project instead of adding another.
+  await page.getByLabel('Current project').selectOption('__new')
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Retry project form')
+  await form.getByRole('button', { name: 'Save', exact: true }).click()
+  await dialog.getByText(/Simulated lost response/).waitFor() // the project form shows errors below its form
+  await form.getByRole('button', { name: 'Save', exact: true }).click()
+  await dialog.waitFor({ state: 'detached' })
+  const projectCalls = (await listSaves()).slice(2)
+  ok(projectCalls.length === 2 && projectCalls.every(([name]) => name === 'create_project') && JSON.stringify(projectCalls[0][1]) === JSON.stringify(projectCalls[1][1]), '#70: the project form retries with the same project id')
 
   await browser.close()
 } finally {

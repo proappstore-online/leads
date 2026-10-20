@@ -174,3 +174,10 @@ on retry. Completed receipts bypass all mutations and stale-token checks. Keep
 receipts when deleting a lead, so a late retry cannot recreate it; delete them with
 `delete_my_data` and include them in recovery exports. `qa:save` tests form transport
 retries; `qa/actions.mjs` injects failures after every transaction statement.
+
+A new list - with the new project it goes in, when the form names one - is saved by
+`save_list_form` (#70), the same shape on `list_form_saves` (0014): one request id per
+unchanged payload, list and project ids fixed for the form's lifetime, and a receipt that
+makes a retry (or a late one after the list is deleted) a confirmed no-op. Editing a list
+still uses `update_list`. `create_project` (the project form) is idempotent on its id
+instead: an exact replay reports 1 change and adds nothing; other details report 0.

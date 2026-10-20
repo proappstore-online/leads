@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { x } from '../lib/actions'
 import { projectOf } from '../lib/lead'
 import type { LeadList, Project } from '../types'
@@ -38,24 +38,41 @@ export function ListForm({ list, projects, defaultProjectId, ownerName, onClose,
     }
   }
 
+  // One identity for the lifetime of this form, including retries: a save whose response was lost
+  // is finished by the retry, never repeated as a second list or project (#70).
+  const [id] = useState(() => list?.id ?? crypto.randomUUID())
+  const [newProjectId] = useState(() => crypto.randomUUID())
+  const pendingSave = useRef<{ request_id: string; payload: string } | null>(null)
+
   function save(e: React.FormEvent) {
     e.preventDefault()
-    const id = list?.id ?? crypto.randomUUID()
+    const addingProject = projectId === NEW_PROJECT
+    const target = addingProject ? newProjectId : projectId
+    const fields = { id, name: name.trim(), purpose: purpose.trim() || null }
+    if (!list) {
+      // A new list (and its new project) is one transaction with a receipt: the same request is replayed until confirmed.
+      const payload = JSON.stringify({ ...fields, project_id: target, new_project: addingProject ? { name: newProject.trim(), owner_name: ownerName || null } : null })
+      if (pendingSave.current?.payload !== payload) pendingSave.current = { request_id: crypto.randomUUID(), payload }
+      const request = pendingSave.current
+      run(async () => {
+        try {
+          await x('save_list_form', request)
+        } catch {
+          throw new Error('Save could not be confirmed. Retry with the same values to safely finish. If it is still refused, close and reopen the form - the project may no longer exist.')
+        }
+        onSaved(id)
+      })
+      return
+    }
     run(async () => {
-      let target = projectId
-      if (target === NEW_PROJECT) {
-        target = crypto.randomUUID()
-        await x('create_project', { id: target, name: newProject.trim(), owner_name: ownerName || null })
+      if (addingProject) {
+        // Replaying the same id and name confirms a project already added by an earlier attempt.
+        const { changes } = await x('create_project', { id: target, name: newProject.trim(), owner_name: ownerName || null })
+        if (changes === 0) throw new Error('Not saved - a project was already added from this form under another name. Close and reopen the list to move it there.')
       }
-      const fields = { id, name: name.trim(), purpose: purpose.trim() || null }
-      if (list) {
-        const { changes } = await x('update_list', { ...fields, project_id: projectOf(list) })
-        if (changes === 0) throw new Error('Not saved - this list was moved or deleted. Close and reopen it.')
-        if (target && target !== list.project_id) await x('set_list_project', { id, project_id: projectOf(list), to_project_id: target })
-      } else {
-        const { changes } = await x('create_list', { ...fields, project_id: target })
-        if (changes === 0) throw new Error('Not saved - that project no longer exists.')
-      }
+      const { changes } = await x('update_list', { ...fields, project_id: projectOf(list) })
+      if (changes === 0) throw new Error('Not saved - this list was moved or deleted. Close and reopen it.')
+      if (target && target !== list.project_id) await x('set_list_project', { id, project_id: projectOf(list), to_project_id: target })
       onSaved(id)
     })
   }

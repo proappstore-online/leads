@@ -2,10 +2,17 @@ import { q as baseQ, calls, x as baseX } from './actions'
 export { calls } from './actions'
 export type { ActionMeta } from './actions'
 let attempt = 0
+let formAttempt = 0
 export async function x(name: string, params: Record<string, unknown> = {}) {
   if (name === 'save_lead_form' || name === 'add_lead_to_list') {
     calls.push([name, params])
     if (++attempt % 2 === 1) throw new Error('Simulated lost response')
+    return { changes: 1 }
+  }
+  // #70: the first attempt of each new list or project save loses its response.
+  if (name === 'save_list_form' || name === 'create_project') {
+    calls.push([name, params])
+    if (++formAttempt % 2 === 1) throw new Error('Simulated lost response')
     return { changes: 1 }
   }
   return baseX(name, params)

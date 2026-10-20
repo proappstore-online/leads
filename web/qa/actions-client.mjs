@@ -14,6 +14,13 @@ for (const reply of [{ results: [] }, { results: [{ rows: [] }] }, { meta: { cha
   await assert.rejects(x('save_lead_form', {}), /not confirmed/)
 }
 console.log('PASS  #42: missing completion evidence is never treated as a successful save')
+globalThis.actionReply = { results: [{ meta: { changes: 0 } }, { rows: [{ completed: 1 }], meta: { changes: 0 } }] }
+assert.equal((await x('save_list_form', {})).changes, 1)
+for (const reply of [{ results: [] }, { results: [{ rows: [] }] }, { meta: { changes: 1 } }]) {
+  globalThis.actionReply = reply
+  await assert.rejects(x('save_list_form', {}), /not confirmed/)
+}
+console.log('PASS  #70: a list save is confirmed only by its completed receipt')
 globalThis.actionReply = { meta: { changes: 0 } }
 assert.equal((await x('update_lead', {})).changes, 0)
 console.log('PASS  existing execute metadata remains available to callers')

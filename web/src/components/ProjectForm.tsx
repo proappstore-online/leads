@@ -71,12 +71,16 @@ export function ProjectForm({ project, ownerName, onClose, onSaved, onDeleted, o
     }
   }
 
+  // One id for the lifetime of this form: retrying a save whose response was lost confirms the
+  // project the first attempt added instead of adding a second one (#70).
+  const [id] = useState(() => project?.id ?? crypto.randomUUID())
+
   function save(e: React.FormEvent) {
     e.preventDefault()
-    const id = project?.id ?? crypto.randomUUID()
     run(async () => {
       const fields = { id, name: name.trim(), description: description.trim() || null }
-      await x(project ? 'update_project' : 'create_project', project ? fields : { ...fields, owner_name: ownerName || null })
+      const { changes } = await x(project ? 'update_project' : 'create_project', project ? fields : { ...fields, owner_name: ownerName || null })
+      if (!project && changes === 0) throw new Error('Not saved - a project was already added from this form with other details. Close the form to find it.')
       onSaved(id)
     })
   }

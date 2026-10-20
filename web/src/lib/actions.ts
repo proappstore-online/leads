@@ -27,7 +27,7 @@ export async function x(name: string, params: Record<string, unknown> = {}): Pro
     if (meta?.changes !== 1) throw new Error('Name save was not confirmed.')
     return meta
   }
-  if (name === 'save_lead_form') {
+  if (name === 'save_lead_form' || name === 'save_list_form') {
     // Batch actions return per-statement results, not a top-level meta.
     if (res.results?.at(-1)?.rows?.[0]?.completed !== 1) throw new Error('Save was not confirmed.')
     return { changes: 1 }
