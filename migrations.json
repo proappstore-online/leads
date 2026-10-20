@@ -51,6 +51,10 @@
     {
       "name": "0013_user_profiles",
       "sql": "CREATE TABLE IF NOT EXISTS user_profiles (id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL CHECK (length(trim(display_name)) BETWEEN 1 AND 80), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"
+    },
+    {
+      "name": "0014_atomic_list_form_saves",
+      "sql": "CREATE TABLE IF NOT EXISTS list_form_saves (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, payload TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, valid INTEGER NOT NULL CHECK (valid = 1), created_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS idx_list_form_saves_user ON list_form_saves (user_id)"
     }
   ]
 }

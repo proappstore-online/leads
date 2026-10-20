@@ -310,6 +310,7 @@ restored.exec(importSql(recoveryRows.map((record) => JSON.stringify(record)).joi
 const scopeWhere = {
   user_profiles: 'user_id = ?',
   lead_form_saves: 'user_id = ?',
+  list_form_saves: 'user_id = ?',
   leads: 'user_id = ?', lists: 'user_id = ?', memberships: 'user_id = ?', messages: 'user_id = ?', sources: 'user_id = ?', projects: 'user_id = ?', join_table_backfills: 'user_id = ?', legacy_lead_lists: 'user_id = ?',
   legacy_project_membership_backfills: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
   project_memberships: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', project_invites: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)', legacy_project_members: 'project_id IN (SELECT id FROM projects WHERE user_id = ?)',
@@ -351,7 +352,7 @@ call('add_message', O, { id: MSG, lead_id: LEAD, platform: 'Email', direction: '
 call('create_project_invite', O, { project_id: P })
 const CODE = db.prepare('SELECT code FROM project_invites WHERE project_id = ?').get(P).code
 const OWNER_IDS = [P, L, LEAD, OTHER, LEGACY_LEAD, LEGACY_MEMBER, 'src', MSG, CODE]
-const TABLES = ['lead_form_saves', 'leads', 'lists', 'lead_lists', 'lead_list_memberships', 'messages', 'project_invites', 'project_members', 'project_memberships', 'join_table_backfills', 'legacy_project_membership_backfills', 'projects', 'sources']
+const TABLES = ['lead_form_saves', 'list_form_saves', 'leads', 'lists', 'lead_lists', 'lead_list_memberships', 'messages', 'project_invites', 'project_members', 'project_memberships', 'join_table_backfills', 'legacy_project_membership_backfills', 'projects', 'sources']
 const snapshot = () => Object.fromEntries(TABLES.map((t) => [t, new Set(db.prepare(`SELECT * FROM ${t}`).all().map((r) => JSON.stringify(r)))]))
 const before = snapshot()
 
@@ -368,6 +369,7 @@ const ARGS = {
 const SKIP = {
   how_to_use: 'static guidance, the same for every caller',
   save_lead_form: 'refusals throw to roll back the transaction; ownership and replay isolation are tested in #42',
+  save_list_form: 'refusals throw to roll back the transaction; ownership and replay isolation are tested in #70',
   backfill_legacy_join_tables: 'creates only a caller-owned completion marker; its legacy-copy and isolation behaviour is tested above',
   get_project_invite: 'the invite code IS the grant — reading it by code is how joining works',
   join_project: 'the grant path; its one-shot behaviour is tested below',
@@ -669,6 +671,87 @@ for (const scenario of ['revoked', 'consumed', 'expired', 'valid']) {
     call('delete_my_data', user, { confirm: 'DELETE MY DATA' })
     ok(db.prepare('SELECT count(*) AS n FROM lead_form_saves WHERE user_id = ?').get(user).n === 0, '#42: delete_my_data removes the durable receipts')
   }
+}
+
+// #70: a new list - and the new project it goes in - is saved once, however often the form retries.
+{
+  const user = 'list-form-owner'
+  const request = randomUUID()
+  const project = randomUUID()
+  const list = randomUUID()
+  const payload = { id: list, name: 'Investors', purpose: 'Seed round', project_id: project, new_project: { name: 'Fundraise', owner_name: 'Ada' } }
+  const save = (value = payload, key = request, who = user) => call('save_list_form', who, { request_id: key, payload: JSON.stringify(value) })
+  const state = () => JSON.stringify(['projects', 'lists', 'list_form_saves'].map((t) => db.prepare(`SELECT * FROM ${t} WHERE user_id = ? ORDER BY id`).all(user)))
+  const count = (table) => db.prepare(`SELECT count(*) AS n FROM ${table} WHERE user_id = ?`).get(user).n
+  const refused = (value, label, key = randomUUID(), who = user) => {
+    const before = state()
+    let threw = false
+    try { save(value, key, who) } catch { threw = true }
+    ok(threw && state() === before, label)
+  }
+  if (!TOOLS.save_list_form) {
+    ok(false, '#70: transactional save_list_form action exists')
+  } else {
+    const tool = TOOLS.save_list_form
+    const statements = tool.statements
+    const confirmation = (key = request) => {
+      const [sql, values] = bind(statements.at(-1), resolve(tool, { request_id: key, payload: JSON.stringify(payload) }), user)
+      return db.prepare(sql).all(...values)
+    }
+    refused({ ...payload, name: '  ' }, '#70: an empty list name rolls back the new project too')
+    refused({ ...payload, new_project: { name: ' ' } }, '#70: an empty project name rolls back the whole save')
+    refused({ ...payload, new_project: null }, '#70: a list for a project that does not exist is refused')
+    refused({ ...payload, purpose: 42 }, '#70: a malformed payload is refused')
+    ok(confirmation().length === 0, '#70: an absent receipt cannot confirm a list save')
+    for (let stage = 1; stage <= statements.length; stage++) {
+      const before = state()
+      tool.statements = [...statements.slice(0, stage), 'INSERT INTO lists (id) VALUES (:request_id)', ...statements.slice(stage)]
+      let threw = false
+      try { save() } catch { threw = true }
+      ok(threw && state() === before, `#70: failure after statement ${stage} rolls back all writes`)
+    }
+    tool.statements = statements
+    save()
+    ok(confirmation()[0]?.completed === 1, '#70: the batch returns completion evidence for the client')
+    const saved = db.prepare('SELECT l.name, l.purpose, l.project_id, p.name AS project, p.owner_name FROM lists l JOIN projects p ON p.id = l.project_id WHERE l.id = ?').get(list)
+    ok(saved?.name === 'Investors' && saved.purpose === 'Seed round' && saved.project_id === project && saved.project === 'Fundraise' && saved.owner_name === 'Ada', '#70: the new project and its list are saved together')
+    const committed = state()
+    save() // A committed request whose response was lost.
+    save()
+    ok(state() === committed && count('projects') === 1 && count('lists') === 1, '#70: retrying a saved new project + list adds neither again')
+    ok(confirmation()[0]?.completed === 1, '#70: a no-op retry still returns completion evidence')
+    refused({ ...payload, name: 'Other name' }, '#70: a request id cannot be reused for another payload', request)
+    refused(payload, '#70: a fresh request id cannot add the same list or project twice')
+    refused(payload, '#70: another user cannot replay the receipt', request, 'list-form-stranger')
+    refused({ ...payload, id: randomUUID(), new_project: null }, '#70: another user cannot add a list to this project', randomUUID(), 'list-form-stranger')
+
+    // A new list in an existing project.
+    const second = { id: randomUUID(), name: 'Advisors', purpose: null, project_id: project, new_project: null }
+    const key = randomUUID()
+    save(second, key)
+    save(second, key)
+    ok(count('lists') === 2 && count('projects') === 1, '#70: retrying a new list in an existing project adds it once')
+
+    // A late retry after the list is deleted must not bring it back.
+    call('delete_list', user, { id: second.id, project_id: project })
+    save(second, key)
+    ok(!db.prepare('SELECT id FROM lists WHERE id = ?').get(second.id), '#70: a delayed retry never resurrects a deleted list')
+
+    const exported = call('export_my_data', user, { section: 'list_form_saves' }).filter((r) => r.data !== null)
+    ok(exported.length === 2, '#70: list save receipts are included in the recovery export')
+    call('delete_my_data', user, { confirm: 'DELETE MY DATA' })
+    ok(count('list_form_saves') === 0, '#70: delete_my_data removes the list save receipts')
+  }
+
+  // The project form's create_project: an exact replay confirms instead of adding or failing.
+  const owner = 'project-form-owner'
+  const id = randomUUID()
+  const projects = () => db.prepare('SELECT * FROM projects WHERE user_id = ?').all(owner)
+  ok(call('create_project', owner, { id, name: 'Client', description: 'Retainer' }) === 1, '#70: create_project adds a project')
+  const first = JSON.stringify(projects())
+  ok(call('create_project', owner, { id, name: 'Client', description: 'Retainer' }) === 1 && JSON.stringify(projects()) === first, '#70: replaying create_project confirms without adding or changing anything')
+  ok(call('create_project', owner, { id, name: 'Renamed', description: 'Retainer' }) === 0 && JSON.stringify(projects()) === first, '#70: create_project with a used id and other details changes nothing')
+  ok(call('create_project', 'project-form-stranger', { id, name: 'Client', description: 'Retainer' }) === 0 && JSON.stringify(projects()) === first, '#70: another user replaying the id changes nothing')
 }
 
 // #47: deleting older messages must not move later appends ahead of survivors.

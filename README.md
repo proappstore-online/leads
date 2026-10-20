@@ -73,7 +73,7 @@ rows until it reaches `total`. An empty section returns one row with `data: null
 ```text
 user_profiles, leads, lists, memberships, messages, sources, projects,
 project_memberships, project_invites, join_table_backfills, legacy_project_membership_backfills, lead_form_saves,
-legacy_lead_lists, legacy_project_members
+list_form_saves, legacy_lead_lists, legacy_project_members
 ```
 
 To rehearse or recover, start with a *new, empty* D1 database that has the current
