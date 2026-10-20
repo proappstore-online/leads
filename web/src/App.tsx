@@ -11,6 +11,7 @@ import { LeadFilters } from './components/LeadFilters'
 import { LeadForm } from './components/LeadForm'
 import { LeadTable } from './components/LeadTable'
 import { ListForm } from './components/ListForm'
+import { ListNav, type Browse, type HomeView } from './components/ListNav'
 import { ProjectForm } from './components/ProjectForm'
 import { SourceDetails } from './components/SourceDetails'
 import { SourceForm } from './components/SourceForm'
@@ -209,7 +210,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   const [tags, setTags] = useState<{ tag: string; leads: number }[]>([])
   /** Leads assigned to you — your own and those shared with you. */
   const [assignedOnly, setAssignedOnly] = useState(false)
-  const [view, setView] = useState<'leads' | 'sources' | 'stats'>('leads')
+  const [view, setView] = useState<HomeView>('leads')
   const [sources, setSources] = useState<Source[]>([])
   const [noSource, setNoSource] = useState(0)
   const [sourceSort, setSourceSort] = useState<SourceSort>('leads')
@@ -234,9 +235,6 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   /** Table or Kanban board — the same leads either way; remembered on this device. */
   const [layout, setLayout] = useState<'table' | 'board'>(() => (localStorage.getItem(LAYOUT_KEY) === 'board' ? 'board' : 'table'))
   const request = useRef(0)
-  const navRef = useRef<HTMLElement>(null)
-  /** Which ends of the phone nav strip have more to scroll to - they fade as a hint. */
-  const [navMore, setNavMore] = useState({ start: false, end: false })
 
   const loadLists = useCallback(async () => {
     setListsLoading(true)
@@ -329,7 +327,7 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
   }
 
   /** Show the leads table for one scope: a list, a project, flagged or assigned leads — or all leads. */
-  function browse(to: { listId?: string; attention?: boolean; assigned?: boolean; followUps?: boolean }) {
+  function browse(to: Browse) {
     setView('leads')
     setListId(to.listId ?? null)
     setAttentionOnly(Boolean(to.attention))
@@ -382,84 +380,32 @@ function Home({ userId, userName, projects, currentProject, projectsVersion, onP
 
   const current = lists.find((l) => l.id === listId) ?? null
   const ownProjects = projects.filter((p) => p.is_owner)
-  // Under "All projects", lists made before projects are shown apart, with the prompt to place them.
-  const looseLists = lists.filter((l) => !l.project_id)
   // Names for the Assigned column, filter and form: members of your projects, and you.
   const people = new Map(members.map((m) => [m.user_id, m.display_name ?? 'Unnamed member']))
   people.set(userId, 'Me')
   const assignees = [...new Map(members.map((m) => [m.user_id, m])).values()]
-  /** Props for a nav chip; aria-current also lets the phone strip scroll the active one into view. */
-  const chip = (active: boolean, extra = '') => ({
-    'aria-current': active ? 'page' as const : undefined,
-    className: `flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold ${extra} ${active ? 'bg-[var(--accent-soft)] text-[var(--accent-deep)]' : 'text-[var(--ink)] hover:bg-[var(--line)]'}`,
-  })
-  const listChip = (list: LeadList) => (
-    <button key={list.id} type="button" onClick={() => browse({ listId: list.id })} title={list.purpose ?? undefined} {...chip(view === 'leads' && listId === list.id, 'max-lg:order-1')}>
-      <span className="truncate">{list.name}</span>
-      <span className="text-xs font-medium text-[var(--muted)]">{list.lead_count}</span>
-    </button>
-  )
-
   useEffect(() => {
     const page = view === 'stats' ? 'Stats' : view === 'sources' ? 'Sources' : attentionOnly ? 'Needs attention' : followUpsOnly ? 'Follow-ups due' : assignedOnly ? 'Assigned to me' : current?.name ?? 'Leads'
     document.title = `${page} — ProAppStore`
   }, [view, attentionOnly, followUpsOnly, assignedOnly, current?.name])
 
-  const updateNavMore = useCallback(() => {
-    const nav = navRef.current
-    if (!nav) return
-    setNavMore({ start: nav.scrollLeft > 1, end: nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1 })
-  }, [])
-  useEffect(() => {
-    updateNavMore()
-    window.addEventListener('resize', updateNavMore)
-    return () => window.removeEventListener('resize', updateNavMore)
-  }, [updateNavMore, lists.length, listsLoading])
-  // Keep the chip for the current view in sight on the phone strip.
-  useEffect(() => {
-    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [view, listId, attentionOnly, followUpsOnly, assignedOnly])
-  const fade = (side: 'left' | 'right') => `linear-gradient(to ${side}, black calc(100% - 2rem), transparent)`
-  const navMask = navMore.start && navMore.end
-    ? 'linear-gradient(to right, transparent, black 2rem, black calc(100% - 2rem), transparent)'
-    : navMore.end ? fade('right') : navMore.start ? fade('left') : undefined
   const filtered = Boolean(filter.search.trim()) || activeFilterCount(filter) > 0
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-5 lg:flex-row lg:gap-6 lg:px-6">
-      {/* Phones: one strip that scrolls sideways - views first, then lists; the faded edge shows there is more. */}
-      <nav ref={navRef} onScroll={updateNavMore} aria-label="Lead lists" style={{ maskImage: navMask, WebkitMaskImage: navMask }} className="flex gap-1 overflow-x-auto lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible">
-        {listsLoading && <span role="status" className="shrink-0 px-3 py-2 text-sm text-[var(--muted)]">Loading lists…</span>}
-        {listsError && <div className="min-w-72 lg:min-w-0"><RetryState error={listsError} onRetry={loadLists} /></div>}
-        <button type="button" onClick={() => { browse({}); setFilter((f) => ({ ...f, sourceId: '' })) }} {...chip(view === 'leads' && listId === null && !attentionOnly && !assignedOnly && !followUpsOnly)}>
-          <span>All leads</span>
-          <span className="text-xs font-medium text-[var(--muted)]">{total}</span>
-        </button>
-        <button type="button" onClick={() => browse({ attention: true })} {...chip(view === 'leads' && attentionOnly)}>
-          <span className={attentionCount > 0 ? 'text-[var(--warning)]' : undefined}>Needs attention</span>
-          <span className={`rounded-full px-2 text-xs font-bold ${attentionCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{attentionCount}</span>
-        </button>
-        <button type="button" onClick={() => browse({ followUps: true })} {...chip(view === 'leads' && followUpsOnly)}>
-          <span className={followUpCount > 0 ? 'text-[var(--warning)]' : undefined}>Follow-ups due</span>
-          <span className={`rounded-full px-2 text-xs font-bold ${followUpCount > 0 ? 'bg-[var(--warning)] text-[var(--paper)]' : 'font-medium text-[var(--muted)]'}`}>{followUpCount}</span>
-        </button>
-        <button type="button" onClick={() => browse({ assigned: true })} {...chip(view === 'leads' && assignedOnly)}>
-          <span>Assigned to me</span>
-          <span className="text-xs font-medium text-[var(--muted)]">{assignedCount}</span>
-        </button>
-        {lists.filter((l) => l.project_id).map((l) => listChip(l))}
-        {looseLists.length > 0 && <div className="hidden px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] lg:block" title="Lists from before projects - open one and choose its project">Not in a project</div>}
-        {looseLists.map((l) => listChip(l))}
-        <button type="button" onClick={() => setEditingList('new')} className="shrink-0 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--accent)] hover:bg-[var(--line)] max-lg:order-1">+ New list</button>
-        <div className="hidden border-t border-[var(--line)] lg:my-2 lg:block" />
-        <button type="button" onClick={() => setView('stats')} {...chip(view === 'stats')}>
-          <span>Stats</span>
-        </button>
-        <button type="button" onClick={() => setView('sources')} {...chip(view === 'sources')}>
-          <span>Sources</span>
-          <span className="text-xs font-medium text-[var(--muted)]">{sources.length}</span>
-        </button>
-      </nav>
+      <ListNav
+        lists={lists}
+        counts={{ total, attention: attentionCount, followUps: followUpCount, assigned: assignedCount, sources: sources.length }}
+        loading={listsLoading}
+        error={listsError}
+        onRetry={loadLists}
+        view={view}
+        active={{ listId, attention: attentionOnly, followUps: followUpsOnly, assigned: assignedOnly }}
+        onBrowse={browse}
+        onAllLeads={() => { browse({}); setFilter((f) => ({ ...f, sourceId: '' })) }}
+        onNewList={() => setEditingList('new')}
+        onView={setView}
+      />
 
       {view === 'stats' ? (
         <StatsPage lists={lists} projects={projects} sources={sources} assignees={assignees} tags={tags} people={people} projectId={scope} version={version} onOpenLead={openLeadById} onAddLead={() => setEditingLead('new')} />
