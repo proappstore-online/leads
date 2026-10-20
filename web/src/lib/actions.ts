@@ -32,5 +32,16 @@ export async function x(name: string, params: Record<string, unknown> = {}): Pro
     if (res.results?.at(-1)?.rows?.[0]?.completed !== 1) throw new Error('Save was not confirmed.')
     return { changes: 1 }
   }
+  // Batches that report the statement which does the work. Zero rows there means nothing happened.
+  if (name === 'set_list_project') {
+    const meta = res.results?.[0]?.meta
+    if (meta?.changes !== 1) throw new Error('The list was not moved to that project. Close and reopen it.')
+    return meta
+  }
+  if (name === 'delete_list') {
+    const meta = res.results?.[1]?.meta
+    if (meta?.changes !== 1) throw new Error('The list was not deleted - it may have moved. Close and reopen it.')
+    return meta
+  }
   return res.meta
 }

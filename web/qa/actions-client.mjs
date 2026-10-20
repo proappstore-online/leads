@@ -26,3 +26,15 @@ for (const reply of [{ results: [] }, { results: [{ meta: { changes: 0 } }, { me
   await assert.rejects(x('update_display_name', {}), /not confirmed/)
 }
 console.log('PASS  #40: missing profile persistence evidence never reports a successful save')
+
+// Batches: a refused move or delete (zero rows in the statement that does it) must not look saved.
+globalThis.actionReply = { results: [{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }] }
+assert.equal((await x('set_list_project', {})).changes, 1)
+globalThis.actionReply = { results: [{ meta: { changes: 0 } }, { meta: { changes: 0 } }] }
+await assert.rejects(x('set_list_project', {}), /not moved/)
+console.log('PASS  a list move the database refused is reported, not saved')
+globalThis.actionReply = { results: [{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }] }
+assert.equal((await x('delete_list', {})).changes, 1)
+globalThis.actionReply = { results: [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }] }
+await assert.rejects(x('delete_list', {}), /not deleted/)
+console.log('PASS  a list delete the database refused is reported, not saved')
