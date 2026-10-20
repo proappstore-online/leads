@@ -51,6 +51,21 @@ async function names(page, wide) {
   return page.$$eval(sel, (els) => els.map((e) => e.textContent.trim().split(' ')[0]))
 }
 
+/**
+ * The names once they show `expected`, or what is on screen after 5s. Leads reload 250ms after a
+ * sort or filter change (debounced) and then wait on the fixture, so a fixed sleep races the
+ * reload and reads the previous order on a busy machine (#72).
+ */
+async function settled(page, wide, expected) {
+  const until = Date.now() + 5000
+  let got = await names(page, wide)
+  while (got.join() !== expected && Date.now() < until) {
+    await page.waitForTimeout(100)
+    got = await names(page, wide)
+  }
+  return got
+}
+
 /** The column a table header says it is sorting by, and which way. */
 async function headerState(page) {
   return page.$$eval('thead th', (els) => els
@@ -60,7 +75,7 @@ async function headerState(page) {
 
 async function assignedView(page) {
   await page.locator('nav').getByRole('button', { name: /^Assigned to me/ }).click()
-  await page.waitForTimeout(500)
+  await page.getByRole('heading', { name: 'Assigned to me' }).waitFor()
 }
 
 async function desktop(browser, URL_BASE) {
@@ -70,18 +85,16 @@ async function desktop(browser, URL_BASE) {
   await page.waitForSelector('table')
   await assignedView(page)
 
-  const start = await names(page, true)
+  const start = await settled(page, true, 'Ann,Dan,Bob,Cara')
   ok(start.join() === 'Ann,Dan,Bob,Cara', `opens on the most recently changed (${start.join(', ')})`)
 
   await page.getByRole('button', { name: 'Sort by Name' }).click()
-  await page.waitForTimeout(400)
-  const asc = await names(page, true)
+  const asc = await settled(page, true, 'Ann,Bob,Cara,Dan')
   ok(asc.join() === 'Ann,Bob,Cara,Dan', `Name sorts ascending (${asc.join(', ')})`)
   ok((await headerState(page)).includes('Name:ascending'), 'the Name column says ascending')
 
   await page.getByRole('button', { name: 'Sort by Name' }).click()
-  await page.waitForTimeout(400)
-  const desc = await names(page, true)
+  const desc = await settled(page, true, 'Dan,Cara,Bob,Ann')
   ok(desc.join() === 'Dan,Cara,Bob,Ann', `clicking again reverses it (${desc.join(', ')})`)
   ok((await headerState(page)).includes('Name:descending'), 'the Name column says descending')
   ok((await headerState(page)).length === 1, 'only the sorted column claims a direction')
@@ -95,8 +108,7 @@ async function desktop(browser, URL_BASE) {
     ['Changed', 'Ann,Dan,Bob,Cara'],
   ]) {
     await page.getByRole('button', { name: `Sort by ${label}` }).click()
-    await page.waitForTimeout(400)
-    const got = await names(page, true)
+    const got = await settled(page, true, expected)
     ok(got.join() === expected, `${label} reorders the rows (${got.join(', ')})`)
     ok((await headerState(page))[0]?.startsWith(label), `${label} shows its direction`)
   }
@@ -105,8 +117,9 @@ async function desktop(browser, URL_BASE) {
   await page.getByLabel('Search leads').fill('cor')
   await page.waitForTimeout(600)
   await page.getByRole('button', { name: 'Sort by Name' }).click()
-  await page.waitForTimeout(500)
-  const filtered = await names(page, true)
+  // One lead matches either way, so wait for the sorted request itself, not just the rows.
+  await page.waitForFunction(() => window.calls.filter((c) => c[0] === 'list_assigned_leads').at(-1)?.[1].sort === 'name', null, { timeout: 5000 }).catch(() => {})
+  const filtered = await settled(page, true, 'Cara')
   ok(filtered.join() === 'Cara', `search survives a sort (${filtered.join(', ') || 'no rows'})`)
   const sent = await page.evaluate(() => window.calls.filter((c) => c[0] === 'list_assigned_leads').at(-1)[1])
   ok(sent.q === 'cor' && sent.sort === 'name' && sent.project_id === 'p1',
@@ -117,8 +130,7 @@ async function desktop(browser, URL_BASE) {
   await page.getByLabel('Filter by status').selectOption('won')
   await page.waitForTimeout(500)
   await page.getByRole('button', { name: 'Sort by Name' }).click()
-  await page.waitForTimeout(500)
-  ok((await names(page, true)).join() === 'Ann', 'the status filter survives a sort too')
+  ok((await settled(page, true, 'Ann')).join() === 'Ann', 'the status filter survives a sort too')
   await page.close()
 }
 
@@ -132,17 +144,14 @@ async function phone(browser, URL_BASE) {
   const picker = page.getByLabel('Sort leads')
   ok(await picker.inputValue() === 'updated', 'the phone picker shows the current sort')
   await picker.selectOption('name')
-  await page.waitForTimeout(500)
-  ok((await names(page, false)).join() === 'Ann,Bob,Cara,Dan', 'the picker reorders the cards')
+  ok((await settled(page, false, 'Ann,Bob,Cara,Dan')).join() === 'Ann,Bob,Cara,Dan', 'the picker reorders the cards')
 
   await page.getByRole('button', { name: /Ascending/ }).click()
-  await page.waitForTimeout(500)
-  ok((await names(page, false)).join() === 'Dan,Cara,Bob,Ann', 'the direction button reverses them')
+  ok((await settled(page, false, 'Dan,Cara,Bob,Ann')).join() === 'Dan,Cara,Bob,Ann', 'the direction button reverses them')
   ok(await page.getByRole('button', { name: /Descending/ }).isVisible(), 'and it now offers ascending again')
 
   await picker.selectOption('status')
-  await page.waitForTimeout(500)
-  ok((await names(page, false)).join() === 'Bob,Cara,Dan,Ann', 'another column reorders the cards')
+  ok((await settled(page, false, 'Bob,Cara,Dan,Ann')).join() === 'Bob,Cara,Dan,Ann', 'another column reorders the cards')
 
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   ok(over <= 0, `sorting on a phone adds no sideways scrolling (+${over}px)`)
