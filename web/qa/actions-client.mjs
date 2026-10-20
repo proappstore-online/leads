@@ -38,3 +38,15 @@ assert.equal((await x('delete_list', {})).changes, 1)
 globalThis.actionReply = { results: [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }] }
 await assert.rejects(x('delete_list', {}), /not deleted/)
 console.log('PASS  a list delete the database refused is reported, not saved')
+
+// delete_project: the project row is statement 2 - nothing is deleted while it still has lists.
+globalThis.actionReply = { results: [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }] }
+assert.equal((await x('delete_project', {})).changes, 1)
+globalThis.actionReply = { results: [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }] }
+await assert.rejects(x('delete_project', {}), /not deleted/)
+globalThis.actionReply = { results: [{ meta: { changes: 0 } }] }
+await assert.rejects(x('leave_project', {}), /no longer in this project/)
+await assert.rejects(x('remove_project_member', {}), /no longer a member/)
+globalThis.actionReply = { results: [{ meta: { changes: 1 } }, { meta: { changes: 0 } }] }
+assert.equal((await x('leave_project', {})).changes, 1)
+console.log('PASS  a project delete that kept its lists, or a membership already gone, is reported')

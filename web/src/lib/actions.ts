@@ -32,16 +32,23 @@ export async function x(name: string, params: Record<string, unknown> = {}): Pro
     if (res.results?.at(-1)?.rows?.[0]?.completed !== 1) throw new Error('Save was not confirmed.')
     return { changes: 1 }
   }
-  // Batches that report the statement which does the work. Zero rows there means nothing happened.
-  if (name === 'set_list_project') {
-    const meta = res.results?.[0]?.meta
-    if (meta?.changes !== 1) throw new Error('The list was not moved to that project. Close and reopen it.')
-    return meta
-  }
-  if (name === 'delete_list') {
-    const meta = res.results?.[1]?.meta
-    if (meta?.changes !== 1) throw new Error('The list was not deleted - it may have moved. Close and reopen it.')
+  const work = WORK_STATEMENT[name]
+  if (work) {
+    const meta = res.results?.[work.index]?.meta
+    if (meta?.changes !== 1) throw new Error(work.refused)
     return meta
   }
   return res.meta
+}
+
+/**
+ * Batches whose guard can refuse them: the statement (by index in mcp.json) that does the work. Zero rows
+ * there means nothing happened - the batch still resolves, so it must not read as saved.
+ */
+const WORK_STATEMENT: Record<string, { index: number; refused: string }> = {
+  set_list_project: { index: 0, refused: 'The list was not moved to that project. Close and reopen it.' },
+  delete_list: { index: 1, refused: 'The list was not deleted - it may have moved. Close and reopen it.' },
+  delete_project: { index: 2, refused: 'The project was not deleted. It may have lists now - move or delete them first.' },
+  leave_project: { index: 0, refused: 'You are no longer in this project. Reload to see where you are.' },
+  remove_project_member: { index: 0, refused: 'That person is no longer a member of this project.' },
 }
