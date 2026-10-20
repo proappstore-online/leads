@@ -69,6 +69,8 @@ export default function App() {
     }
   }, [])
 
+  const changed = () => setProjectsVersion((v) => v + 1)
+
   // On the id, not the user object: a hook that returns a fresh object per render would reload forever.
   useEffect(() => { if (user?.id) loadProjects() }, [user?.id, loadProjects, projectsVersion])
 
@@ -108,7 +110,6 @@ export default function App() {
   if (loading) return <div className="mx-auto flex min-h-dvh w-full max-w-7xl items-center px-4"><LoadingState label="Checking your session…" /></div>
   if (!user) return <SignIn />
 
-  const changed = () => setProjectsVersion((v) => v + 1)
   /** New projects and joins carry the name set on the profile, else the account name. */
   const displayName = storedName ?? user.name
   const closeJoin = () => {
