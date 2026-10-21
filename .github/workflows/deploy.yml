@@ -15,8 +15,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  router:
+    uses: serge-ivo/runner-router/.github/workflows/router.yml@v1
+    with:
+      included-minutes: 2000
+      self-hosted-labels: 'self-hosted,pags'
+    secrets:
+      billing-token: ${{ secrets.RUNNER_BILLING_TOKEN }}
+
   deploy:
-    runs-on: ubuntu-latest
+    needs: router
+    runs-on: ${{ fromJSON(needs.router.outputs.runner) }}
     outputs:
       has_e2e: ${{ steps.e2e-check.outputs.has_e2e }}
     steps:
@@ -132,6 +141,22 @@ jobs:
             echo "R2_ENDPOINT=$(echo "$RESP" | jq -r '.endpoint')"
           } >> "$GITHUB_ENV"
 
+      # ubuntu-latest ships the AWS CLI. The macOS pags runners do not.
+      - name: Install AWS CLI on macOS
+        if: runner.os == 'macOS'
+        run: |
+          if command -v aws >/dev/null 2>&1; then
+            echo "aws already on PATH: $(command -v aws)"
+            exit 0
+          fi
+          brew install awscli
+          if ! command -v aws >/dev/null 2>&1; then
+            for dir in /opt/homebrew/bin /usr/local/bin; do
+              if [ -x "$dir/aws" ]; then echo "$dir" >> "$GITHUB_PATH"; exit 0; fi
+            done
+            echo "::error::aws not on PATH after brew install"; exit 1
+          fi
+
       - name: Upload to R2
         env:
           AWS_DEFAULT_REGION: auto
@@ -147,9 +172,9 @@ jobs:
   # platform fixture session via the SDK's real sign-in path (no test bypass);
   # auth-gated specs skip when PAS_E2E_SESSION_TOKEN is unset.
   e2e:
-    needs: deploy
+    needs: [deploy, router]
     if: needs.deploy.outputs.has_e2e == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.router.outputs.runner) }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -158,9 +183,15 @@ jobs:
       - name: Install E2E deps
         working-directory: e2e
         run: npm install
+      # --with-deps runs apt, so it is Linux-only; the macOS pags runners just need the browser.
       - name: Install Playwright browser
+        if: runner.os == 'Linux'
         working-directory: e2e
         run: npx playwright install --with-deps chromium
+      - name: Install Playwright browser (macOS)
+        if: runner.os != 'Linux'
+        working-directory: e2e
+        run: npx playwright install chromium
       - name: Sign-in session for the smoke (keyless OIDC grant, else PAS_E2E_SESSION_TOKEN)
         env:
           FALLBACK_SESSION: ${{ secrets.PAS_E2E_SESSION_TOKEN }}
