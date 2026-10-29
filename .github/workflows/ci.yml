@@ -8,12 +8,10 @@ on:
 
 jobs:
   router:
-    uses: serge-ivo/runner-router/.github/workflows/router.yml@v1
+    uses: ProAgentStore/runner-router/.github/workflows/router.yml@v1
     with:
       included-minutes: 2000
       self-hosted-labels: 'self-hosted,pags'
-    secrets:
-      billing-token: ${{ secrets.RUNNER_BILLING_TOKEN }}
 
   typecheck:
     needs: router
